@@ -1,0 +1,29 @@
+# ---- 运行/构建产物 ----
+node_modules/
+dist/
+web/
+renderer/
+
+# ---- 便携版运行时数据 ----
+NmsPowerSimData/
+
+# ---- 测试运行日志 ----
+tests/*.txt
+tests/*.log
+tests/*.exit
+*.log
+
+# ---- QA 证据目录（本地留存，不入库）----
+qa-evidence/
+qa_out_*.txt
+qa2*_out*.txt
+qa107_*.txt
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- 工作区辅助文件 ----
+.workbuddy/

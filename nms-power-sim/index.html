@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>无人深空 · 电力模拟器</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b1015'/%3E%3Cpath d='M19 4 L8 18 h6 l-3 10 L23 14 h-6 z' fill='%2328c7ff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- ===================== 顶栏 ===================== -->
+    <header id="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <path d="M14 2 L5 14 h5 l-2 8 L19 10 h-5 z" fill="#28c7ff"/>
+          </svg>
+        </span>
+        <span class="brand-text">
+          <span class="brand-name">无人深空 · 电力模拟器</span>
+          <span class="brand-sub">NMS Power Sim · 开关 / 自动开关 / 能量逆变器 原理与仿真</span>
+        </span>
+      </div>
+
+      <nav id="view-switch" class="nav" aria-label="视图切换">
+        <button class="nav-btn is-active" type="button" data-view="catalog">元件图鉴</button>
+        <button class="nav-btn" type="button" data-view="lab">仿真实验室</button>
+        <button class="nav-btn" type="button" data-view="presets">应用实例</button>
+      </nav>
+    </header>
+
+    <!-- ===================== 主体 ===================== -->
+    <main id="main">
+
+      <!-- ============ 视图 1 · 元件图鉴 ============ -->
+      <section id="view-catalog" class="view" aria-label="元件图鉴">
+        <div id="catalog-root"></div>
+      </section>
+
+      <!-- ============ 视图 2 · 仿真实验室 ============ -->
+      <section id="view-lab" class="view" hidden aria-label="仿真实验室">
+        <div id="lab-toolbar" class="toolbar">
+          <button class="btn primary" id="btn-run" type="button">❚❚ 暂停</button>
+          <button class="btn" id="btn-reset" type="button">重置</button>
+          <button class="btn" id="btn-step" type="button">单步 +1s</button>
+          <div class="toolbar-group" role="group" aria-label="仿真速度">
+            <span class="toolbar-label">速度</span>
+            <button class="btn speed-btn" type="button" data-speed="0.5">0.5×</button>
+            <button class="btn speed-btn is-active" type="button" data-speed="1">1×</button>
+            <button class="btn speed-btn" type="button" data-speed="2">2×</button>
+            <button class="btn speed-btn" type="button" data-speed="4">4×</button>
+          </div>
+          <div class="toolbar-group" role="group" aria-label="走线样式">
+            <span class="toolbar-label">走线</span>
+            <button class="btn small wire-style-btn is-active" type="button" data-style="straight">直线</button>
+            <button class="btn small wire-style-btn" type="button" data-style="curve">曲线</button>
+            <button class="btn small" id="btn-wires-hidden" type="button" aria-pressed="false" title="隐藏全部导线与交叉拱（元件保留）">隐藏线条</button>
+          </div>
+          <div class="toolbar-group" role="group" aria-label="画布视图">
+            <span class="toolbar-label">视图</span>
+            <button class="btn small" id="btn-zoom-out" type="button">−</button>
+            <span id="zoom-label" class="sim-clock">100%</span>
+            <button class="btn small" id="btn-zoom-in" type="button">+</button>
+            <button class="btn small" id="btn-fit" type="button">适应视图</button>
+          </div>
+          <div class="toolbar-group" role="group" aria-label="昼夜时间">
+            <span class="toolbar-label">时刻</span>
+            <span id="clock-label" class="sim-clock">☀ 08:00 白天</span>
+            <input id="time-range" type="range" min="0" max="23.75" step="0.25" value="8" aria-label="调整游戏内时刻">
+            <label class="chk"><input id="day-cycle" type="checkbox" checked>昼夜循环</label>
+          </div>
+          <div class="toolbar-spacer"></div>
+          <span class="sim-clock"><span id="sim-state">运行中</span> · <span id="time-label">t = 0.00 s</span></span>
+          <button class="btn" id="btn-undo" type="button" disabled title="撤销 (Ctrl+Z)">↩ 撤销</button>
+          <button class="btn" id="btn-redo" type="button" disabled title="重做 (Ctrl+Y / Ctrl+Shift+Z)">↪ 重做</button>
+          <button class="btn" id="btn-save-instance" type="button">存为实例</button>
+          <button class="btn" id="btn-library" type="button">实例库</button>
+          <button class="btn" id="btn-export" type="button">导出 JSON</button>
+          <button class="btn" id="btn-import" type="button">导入 JSON</button>
+          <button class="btn danger" id="btn-clear" type="button">清空画布</button>
+          <input id="import-file" type="file" accept="application/json,.json" hidden>
+        </div>
+
+        <div id="lab-title" class="lab-title">仿真实验室</div>
+
+        <div class="lab-body">
+          <aside class="palette-panel" aria-label="元件库">
+            <h2 class="panel-title">元件库</h2>
+            <p class="panel-hint">点击选中后在画布落点放置；也可直接拖到画布。</p>
+            <div id="palette" class="palette"></div>
+          </aside>
+
+          <div id="canvas-wrap" class="canvas-wrap">
+            <svg id="board" class="board" role="img" aria-label="电路画布"></svg>
+            <div class="canvas-hint">
+              滚轮缩放 · 空格+拖拽平移 · 空白处拖动框选元件（整组移动 / Delete 批量删除）· 从元件库选元件后点画布放置 · 拖动端口连线 · 点击开关切换 · 右键导线选中后 Delete 删除
+            </div>
+          </div>
+
+          <!-- 实例库侧滑面板（不阻塞画布） -->
+          <aside id="library-panel" class="library-panel" hidden aria-label="实例库">
+            <div class="lib-head">
+              <h2 class="panel-title">实例库</h2>
+              <button class="btn small" id="library-close" type="button" aria-label="关闭实例库">✕</button>
+            </div>
+            <p class="panel-hint">保存到本机（localStorage），刷新 / 下次启动仍在；随便携版 exe 数据目录一起带走。</p>
+            <div id="library-list" class="library-list"></div>
+          </aside>
+
+          <aside class="inspector-panel" aria-label="属性与状态">
+            <h2 class="panel-title">属性</h2>
+            <div id="inspector-props" class="inspector-props"></div>
+            <h2 class="panel-title">实时状态</h2>
+            <div id="inspector-status" class="inspector-status"></div>
+            <div class="legend">
+              <span><i class="sq green"></i>端口接通 / 通电</span>
+              <span><i class="sq red"></i>端口切断 / 断电</span>
+              <span><i class="ln blue"></i>蓝线 = 通电导线</span>
+              <span><i class="ln red"></i>红线 = 未通电导线</span>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ============ 视图 3 · 应用实例 ============ -->
+      <section id="view-presets" class="view" hidden aria-label="应用实例">
+        <div id="preset-root"></div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- 自制命名模态（Electron 渲染进程无 window.prompt） -->
+  <div id="name-modal" class="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="name-modal-title">
+      <h3 id="name-modal-title" class="modal-title">存为实例</h3>
+      <input id="name-input" class="modal-input" type="text" maxlength="40" placeholder="输入实例名称">
+      <p id="name-error" class="modal-error" role="alert"></p>
+      <div class="modal-ops">
+        <button class="btn" id="name-modal-cancel" type="button">取消</button>
+        <button class="btn primary" id="name-modal-ok" type="button">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 自制确认模态（重名覆盖 / 删除二次确认） -->
+  <div id="confirm-modal" class="modal-overlay" hidden>
+    <div class="modal" role="alertdialog" aria-modal="true">
+      <h3 class="modal-title">请确认</h3>
+      <p id="confirm-text" class="modal-text"></p>
+      <div class="modal-ops">
+        <button class="btn" id="confirm-modal-cancel" type="button">取消</button>
+        <button class="btn primary" id="confirm-modal-ok" type="button">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 轻提示容器 -->
+  <div id="toast-root" class="toast-root" aria-live="polite"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

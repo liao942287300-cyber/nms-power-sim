@@ -1,0 +1,19 @@
+{
+  "savedAt": "2026-09-18T12:51:32.794Z",
+  "note": "修复前基线（computeStructureSig 字符串指纹 + tick 每帧分配）",
+  "ticks": 2000,
+  "scavenge": 34,
+  "major": 5,
+  "gcDurationMs": 21.52,
+  "tickCpuMs": 0.394,
+  "imported": true,
+  "elements": 376,
+  "wires": 620,
+  "tickAvg": 0.31333333333333335,
+  "renderAvg": 0.004333333373069763,
+  "frameAvg": 0.39,
+  "stableGetElementsCalls": 0,
+  "stableGetWiresCalls": 0,
+  "hasRevisionApi": true,
+  "revisionBumpsOnAdd": true
+}

@@ -1,0 +1,516 @@
+/* =========================================================================
+   无人深空 · 电力模拟器 — css/styles.css
+   深空科技风：近黑蓝底 + 青蓝 / 琥珀橙点缀 + 细网格底纹。
+   全部视觉规格由 CSS 变量驱动。
+   ========================================================================= */
+
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans CJK SC", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  --bg: #0b1015;
+  --bg-2: #0d151c;
+  --panel: #121a21;
+  --panel-2: #16212a;
+  --panel-3: #1b2833;
+  --hover: #1e2c38;
+  --line: #22303a;
+  --line-strong: #33475a;
+
+  --text: #d7e3ea;
+  --muted: #8fa3b0;
+  --dim: #6d7f8c;
+
+  --cyan: #28c7ff;
+  --cyan-soft: rgba(40, 199, 255, 0.14);
+  --amber: #ff9b2f;
+  --amber-soft: rgba(255, 155, 47, 0.14);
+  --green: #2fd06a;
+  --red: #e5484d;
+
+  /* 导线配色：通电 = 蓝，未通电 = 红（与元件端口指示灯「绿=接通/红=切断」是两回事） */
+  --wire-on: #2ea8ff;
+  --wire-off: #c2413f;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.45);
+  --shadow-2: 0 10px 30px rgba(0, 0, 0, 0.55);
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--text);
+  background:
+    radial-gradient(1200px 700px at 80% -10%, rgba(40, 199, 255, 0.08), transparent 60%),
+    radial-gradient(900px 600px at -10% 110%, rgba(255, 155, 47, 0.06), transparent 55%),
+    var(--bg);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+code { font-family: var(--font-mono); font-size: 0.85em; }
+h1, h2, h3, h4 { margin: 0 0 6px; font-weight: 650; letter-spacing: 0.2px; }
+.muted { color: var(--muted); }
+.small { font-size: 12.5px; }
+.eid { color: var(--dim); font-family: var(--font-mono); font-size: 0.78em; }
+
+#app { display: flex; flex-direction: column; height: 100%; }
+
+/* --------------------------- 顶栏 --------------------------- */
+#topbar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 20px;
+  background: linear-gradient(180deg, #101a22, #0c141b);
+  border-bottom: 1px solid var(--line);
+  box-shadow: var(--shadow-1);
+  flex-wrap: wrap;
+}
+
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  background: radial-gradient(circle at 30% 25%, #1b3340, #0d1a22);
+  border: 1px solid var(--line-strong);
+  box-shadow: inset 0 0 12px rgba(40, 199, 255, 0.25);
+}
+.brand-text { display: flex; flex-direction: column; line-height: 1.25; }
+.brand-name { font-size: 16px; font-weight: 700; letter-spacing: 0.4px; }
+.brand-sub { font-size: 11.5px; color: var(--muted); }
+
+.nav { display: flex; gap: 6px; margin-left: auto; background: var(--panel); padding: 4px; border-radius: 999px; border: 1px solid var(--line); }
+.nav-btn {
+  border: 0; background: transparent; color: var(--muted);
+  font: inherit; font-size: 13px; padding: 7px 16px; border-radius: 999px;
+  cursor: pointer; transition: all 140ms ease;
+}
+.nav-btn:hover { color: var(--text); background: var(--hover); }
+.nav-btn.is-active { color: #04121a; background: linear-gradient(180deg, #5ad6ff, var(--cyan)); font-weight: 650; }
+
+/* --------------------------- 主体 --------------------------- */
+#main { flex: 1; min-height: 0; overflow: auto; }
+.view { padding: 20px; max-width: 1500px; margin: 0 auto; }
+
+/* --------------------------- 通用卡片 --------------------------- */
+.rule-card {
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--cyan);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-1);
+}
+.rule-title { font-size: 16px; color: var(--cyan); }
+.rule-line { margin: 6px 0 0; }
+
+/* --------------------------- 按钮 --------------------------- */
+.btn {
+  font: inherit; font-size: 13px;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 7px 13px;
+  cursor: pointer;
+  transition: all 130ms ease;
+  white-space: nowrap;
+}
+.btn:hover { background: var(--hover); border-color: var(--cyan); }
+.btn:active { transform: translateY(1px); }
+.btn.primary { background: linear-gradient(180deg, #1f90c4, #166b95); border-color: #2aa6dd; color: #eaffff; font-weight: 600; }
+.btn.primary:hover { background: linear-gradient(180deg, #2aa6dd, #1b7ba8); }
+.btn.primary.is-paused { background: linear-gradient(180deg, #2f8f4d, #1f6b39); border-color: #38b463; }
+.btn.danger { border-color: #5a2a2c; color: #ffb9bb; }
+.btn.danger:hover { background: #3a1e20; border-color: var(--red); }
+.btn.small { padding: 5px 10px; font-size: 12.5px; }
+.btn:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+
+/* --------------------------- 视图 1 · 图鉴 --------------------------- */
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+.el-card {
+  display: flex; flex-direction: column;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-1);
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+.el-card:hover { border-color: var(--cyan); transform: translateY(-2px); }
+.el-card-head {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px;
+  background: radial-gradient(400px 120px at 10% 0%, rgba(40, 199, 255, 0.08), transparent 70%);
+  border-bottom: 1px solid var(--line);
+}
+.el-card-icon { width: 76px; height: 76px; flex: 0 0 auto; }
+.icon-svg { display: block; }
+.el-card-title h3 { font-size: 15px; }
+.el-card-title .en { margin: 0; font-size: 11.5px; color: var(--dim); }
+.el-card-title .eid { margin: 2px 0 0; }
+.el-card-body { padding: 12px 16px; flex: 1; }
+.el-card-body p { margin: 0 0 8px; font-size: 13px; }
+.el-card-body .relation { color: var(--muted); }
+.el-card-body .principle { color: var(--text); }
+.el-card-body .ports, .el-card-body .usage { color: var(--muted); font-size: 12.5px; }
+.el-card-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 16px; border-top: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.015);
+}
+.mini-indicator { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+.sq { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; }
+.sq.green { background: var(--green); box-shadow: 0 0 6px rgba(47, 208, 106, 0.6); }
+.sq.red { background: var(--red); box-shadow: 0 0 6px rgba(229, 72, 77, 0.6); }
+.ln { display: inline-block; width: 16px; height: 3px; border-radius: 2px; vertical-align: middle; }
+.ln.red { background: #c2413f; }
+.ln.blue { background: #2ea8ff; }
+
+/* 昼夜时间控件 */
+.chk { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.chk input { accent-color: var(--cyan); }
+#time-range { width: 132px; accent-color: var(--cyan); vertical-align: middle; }
+#clock-label { white-space: nowrap; }
+.status-row.is-clock { border-color: var(--line-strong); }
+
+/* --------------------------- 视图 2 · 实验室 --------------------------- */
+.toolbar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px 12px; margin-bottom: 12px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+}
+.toolbar-group { display: flex; align-items: center; gap: 6px; padding-left: 10px; border-left: 1px solid var(--line); }
+.toolbar-label { font-size: 12px; color: var(--muted); margin-right: 2px; }
+.toolbar-spacer { flex: 1; }
+.speed-btn.is-active { background: var(--cyan-soft); border-color: var(--cyan); color: #bff0ff; }
+.wire-style-btn.is-active { background: var(--cyan-soft); border-color: var(--cyan); color: #bff0ff; }
+.sim-clock { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); }
+#sim-state { color: var(--green); }
+#sim-state.paused { color: var(--amber); }
+
+.lab-title { font-size: 14px; color: var(--muted); margin: 0 0 12px 4px; }
+
+.lab-body {
+  display: grid;
+  grid-template-columns: 232px 1fr 312px;
+  gap: 14px;
+  align-items: stretch;
+  height: calc(100vh - 220px);
+  min-height: 520px;
+}
+
+.panel-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); margin: 0 0 8px; }
+.panel-hint { font-size: 11.5px; color: var(--dim); margin: 0 0 10px; }
+
+/* 元件库 */
+.palette-panel {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-md);
+  padding: 14px; overflow: auto;
+}
+.palette { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.palette-item {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 8px 4px; background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); cursor: grab; font: inherit; color: var(--muted);
+  transition: all 130ms ease;
+}
+.palette-item:hover { border-color: var(--cyan); color: var(--text); background: var(--hover); }
+.palette-item.is-active { border-color: var(--cyan); background: var(--cyan-soft); color: #cdf3ff; box-shadow: 0 0 0 1px var(--cyan) inset; }
+.pi-icon { width: 44px; height: 44px; display: block; }
+.pi-svg { width: 100%; height: 100%; }
+.pi-name { font-size: 11.5px; }
+
+/* 画布 */
+.canvas-wrap {
+  position: relative; overflow: hidden;
+  --k: 1; --tx: 0px; --ty: 0px;
+  background-color: #080d11;
+  background-image:
+    linear-gradient(rgba(40, 199, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(40, 199, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(rgba(40, 199, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(40, 199, 255, 0.03) 1px, transparent 1px);
+  background-size:
+    calc(96px * var(--k)) calc(96px * var(--k)),
+    calc(96px * var(--k)) calc(96px * var(--k)),
+    calc(24px * var(--k)) calc(24px * var(--k)),
+    calc(24px * var(--k)) calc(24px * var(--k));
+  background-position:
+    var(--tx) var(--ty), var(--tx) var(--ty),
+    var(--tx) var(--ty), var(--tx) var(--ty);
+  border: 1px solid var(--line); border-radius: var(--radius-md);
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.6);
+}
+/* 缩得太小时细网格会糊成一片：k<0.55 隐藏细网格两层，k<0.3 四层全隐 */
+.canvas-wrap.zoom-far {
+  background-image:
+    linear-gradient(rgba(40, 199, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(40, 199, 255, 0.06) 1px, transparent 1px),
+    none, none;
+}
+.canvas-wrap.zoom-farther { background-image: none; }
+.canvas-wrap.is-pan-ready .board { cursor: grab; }
+.canvas-wrap.is-panning .board { cursor: grabbing; }
+.canvas-wrap.is-armed { border-color: var(--cyan); box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--cyan); }
+.canvas-wrap.is-armed .board { cursor: crosshair; }
+.board { display: block; width: 100%; height: 100%; touch-action: none; }
+/* 1.0.4 修复：提示条曾被 white-space:nowrap + 水平居中裁切（画布 wrap overflow:hidden，
+   胶囊比画布宽时左右两端被切掉）。改为允许换行 + max-width 约束在画布内，
+   绝对定位不参与画布布局流，换行增高不会挤压画布。 */
+.canvas-hint {
+  position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+  max-width: calc(100% - 32px); box-sizing: border-box;
+  font-size: 12px; line-height: 1.6; color: var(--dim); background: rgba(6, 10, 14, 0.75);
+  padding: 6px 12px; border-radius: 14px; border: 1px solid var(--line);
+  pointer-events: none; white-space: normal; text-align: center;
+  overflow-wrap: break-word;
+}
+.canvas-wrap:not(.is-empty) .canvas-hint { opacity: 0.55; }
+
+/* 画布 SVG 内部元素 */
+/* 图层顺序：fx(感应区) < elements(元件) < wires(线缆) < jumps(交叉拱) < overlay(预览)。
+   线缆层整体渲染在元件之上（线不被元件身体遮挡），并禁用指针事件：
+   点击 / 拖拽永远优先命中元件；导线的选中与删除走「右键导线 → 检查器」。
+   overlay（连线预览）为纯视觉层，同样禁用指针事件。 */
+.layer-wires, .layer-overlay { pointer-events: none; }
+.wire {
+  stroke-width: 4; stroke-linecap: round; stroke-linejoin: round;
+  pointer-events: none;
+  transition: stroke 120ms ease, stroke-width 120ms ease;
+}
+.wire.is-idle { stroke: var(--wire-off); }
+/* 1.0.6 性能：去掉通电态 drop-shadow 滤镜——大电路（600+ 导线）下每帧
+   滤镜重算/重绘是交互卡顿的主因之一；改用加亮描边体现通电感。 */
+.wire.is-powered { stroke: var(--wire-on); stroke-width: 5px; }
+.wire.is-selected { stroke: var(--amber); stroke-width: 6; stroke-dasharray: 9 5; }
+/* 暗色底衬 halo：在交叉处「切断」下层导线，使交叉点分层可辨 */
+.wire-halo {
+  stroke: #05090c; stroke-width: 10; stroke-linejoin: round; stroke-linecap: round;
+  fill: none; pointer-events: none;
+}
+/* 连线预览：位于最顶层 layer-overlay，必须禁用指针事件——
+   否则预览描边端点会挡住 elementFromPoint 的端口命中，导致松手连线偶发失败 */
+.wire-preview { stroke: var(--cyan); stroke-width: 3; stroke-dasharray: 6 5; opacity: 0.9; pointer-events: none; }
+
+/* 交叉拱顶层（.layer-jumps，位于元件层之上，故拱永远可见）：
+   深色 casing（切断下层导线）+ 彩色弧（跟随通电态）。仅 7px 短弧上浮，不抬整条导线。 */
+.layer-jumps .jump-casing {
+  stroke: #05090c; stroke-width: 6; fill: none;
+  stroke-linecap: round; stroke-linejoin: round; pointer-events: none;
+}
+.layer-jumps .jump-arc {
+  stroke-width: 4; fill: none;
+  stroke-linecap: round; stroke-linejoin: round; pointer-events: none;
+  transition: stroke 120ms ease;
+}
+.layer-jumps .jump-arc.is-idle { stroke: var(--wire-off); }
+/* 1.0.6 性能：同 .wire.is-powered，去掉 drop-shadow 滤镜，加亮描边。 */
+.layer-jumps .jump-arc.is-powered { stroke: var(--wire-on); stroke-width: 5px; }
+
+/* =========================================================================
+   1.0.8 渲染规模削减
+   ========================================================================= */
+/* 线条隐藏开关（svg 根 .wires-hidden 类，board.setWiresHidden O(1) 切换）：
+   导线层（halo 底衬 + 彩色线）与交叉拱层整层 display:none；元件、端口点、
+   连线预览、框选框保留。display:none 不改变图层顺序，pointer-events 约定
+   不受影响（线缆层本就 pointer-events:none，隐藏期间导线拾取由 board 门控
+   表现为「选不中」）。 */
+.board.wires-hidden .layer-wires,
+.board.wires-hidden .layer-jumps { display: none; }
+
+/* 低缩放装饰削减（svg 根 .is-far-zoom 类，board.refreshDynamic 按 DECOR_HIDE_K=0.55
+   O(1) 切换）：缩放比很低时下列装饰在视觉上难以分辨（7px 拱在 k=0.3 时不足 3px、
+   端口点不足 2px、标签不可读），整层隐藏可显著削减绘制量：
+   - halo 暗色底衬（导线绘制量约减半）与交叉拱层；
+   - 元件名称标签（大电路数百个 <text> 是光栅化热点）与端口点、感应圈虚线；
+   - 导线关闭抗锯齿（shape-rendering: optimizeSpeed）。 */
+.board.is-far-zoom .wire-halos,
+.board.is-far-zoom .layer-jumps,
+.board.is-far-zoom .el-label,
+.board.is-far-zoom .port-dot,
+.board.is-far-zoom .prox-radius,
+.board.is-far-zoom .floor-area { display: none; }
+.board.is-far-zoom .wire,
+.board.is-far-zoom .wire-preview { transition: none; shape-rendering: optimizeSpeed; }
+
+.port { cursor: crosshair; }
+.port-hit { pointer-events: all; }
+.port-dot { stroke: #05090c; stroke-width: 2; pointer-events: none; }
+.port-dot.is-idle { fill: var(--red); }
+/* 1.0.6 性能：同 .wire.is-powered，去掉 drop-shadow 滤镜。 */
+.port-dot.is-powered { fill: var(--green); }
+
+.element { cursor: move; }
+.el-hit { pointer-events: all; }
+.element .icon { pointer-events: none; }
+.el-label { fill: var(--muted); font-size: 12px; font-family: var(--font-sans); pointer-events: none; user-select: none; }
+.sel-box { stroke: var(--cyan); stroke-width: 2; stroke-dasharray: 6 4; opacity: 0.9; }
+
+.prox-radius { stroke: rgba(40, 199, 255, 0.35); stroke-width: 2; stroke-dasharray: 8 6; pointer-events: none; }
+.prox-radius.is-active { stroke: rgba(47, 208, 106, 0.85); stroke-width: 2.5; }
+.floor-area { stroke: rgba(40, 199, 255, 0.35); stroke-width: 2; stroke-dasharray: 8 6; pointer-events: none; }
+.floor-area.is-active { stroke: rgba(47, 208, 106, 0.85); stroke-width: 2.5; }
+
+/* 属性 / 状态面板 */
+.inspector-panel {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-md);
+  padding: 14px; overflow: auto;
+}
+.inspector-props { margin-bottom: 16px; }
+.inspector-props h3 { font-size: 14px; }
+.field { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; font-size: 12.5px; color: var(--muted); }
+.field input[type="range"] { width: 100%; accent-color: var(--cyan); }
+
+.inspector-status { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+.status-row {
+  display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center;
+  padding: 6px 9px; border-radius: var(--radius-sm);
+  background: var(--panel-2); border: 1px solid var(--line);
+}
+.status-row.is-pending { border-color: rgba(255, 155, 47, 0.5); }
+.sr-name { font-size: 12.5px; }
+.sr-id { font-family: var(--font-mono); font-size: 0.78em; color: var(--dim); margin-left: 5px; }
+.sr-state { font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid transparent; }
+.sr-state.on { color: #b6ffcf; background: rgba(47, 208, 106, 0.14); border-color: rgba(47, 208, 106, 0.4); }
+.sr-state.off { color: #ffc2c4; background: rgba(229, 72, 77, 0.14); border-color: rgba(229, 72, 77, 0.4); }
+.sr-state.warn { color: #ffe0b8; background: var(--amber-soft); border-color: rgba(255, 155, 47, 0.45); }
+.timer-bar { grid-column: 1 / -1; height: 4px; background: var(--panel-3); border-radius: 999px; overflow: hidden; margin-top: 2px; }
+.timer-fill { height: 100%; background: linear-gradient(90deg, var(--amber), var(--cyan)); transition: width 100ms linear; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 10px 16px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+/* --------------------------- 视图 3 · 实例 --------------------------- */
+.preset-list { display: flex; flex-direction: column; gap: 18px; }
+.preset-card {
+  display: grid; grid-template-columns: minmax(260px, 400px) 1fr; gap: 18px;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line); border-radius: var(--radius-md);
+  padding: 16px; box-shadow: var(--shadow-1);
+}
+.preset-media {
+  background: #0a0f13; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  display: grid; place-items: center; overflow: hidden;
+}
+.preset-media img { width: 100%; height: auto; max-height: 420px; object-fit: contain; display: block; }
+.preset-info h3 { font-size: 17px; color: var(--cyan); }
+.preset-info h4 { margin-top: 12px; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--dim); }
+.preset-info .tag { display: inline-block; font-size: 12px; color: var(--amber); background: var(--amber-soft); border: 1px solid rgba(255, 155, 47, 0.35); border-radius: 999px; padding: 2px 10px; margin: 2px 0 8px; }
+.preset-info .summary { margin: 0 0 4px; }
+.preset-info .howto { margin: 0; padding-left: 20px; font-size: 13px; color: var(--muted); }
+.preset-info .howto li { margin-bottom: 4px; }
+.preset-info .keypoint { font-size: 13px; color: #ffe0b8; background: var(--amber-soft); border-left: 3px solid var(--amber); padding: 8px 12px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; margin: 12px 0; }
+.preset-info .parts { margin: 0 0 12px; padding-left: 20px; font-size: 13px; color: var(--muted); }
+
+/* --------------------------- 滚动条 --------------------------- */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #24333f; border-radius: 999px; border: 2px solid var(--bg); }
+::-webkit-scrollbar-thumb:hover { background: #2f4457; }
+
+/* --------------------------- 自适应 --------------------------- */
+@media (max-width: 1180px) {
+  .lab-body { grid-template-columns: 200px 1fr 260px; height: auto; }
+}
+@media (max-width: 900px) {
+  .lab-body { grid-template-columns: 1fr; height: auto; }
+  .canvas-wrap { min-height: 460px; }
+  .preset-card { grid-template-columns: 1fr; }
+}
+
+/* =========================================================================
+   1.0.2 新增：框选 / 多选 · 实例库 · 模态 · toast
+   ========================================================================= */
+
+/* 框选虚线框（overlay 层内，世界坐标；overlay 层本身 pointer-events:none） */
+.marquee-box {
+  stroke: var(--cyan); stroke-width: 1.5; stroke-dasharray: 7 5;
+  fill: rgba(40, 199, 255, 0.08);
+  pointer-events: none;
+}
+
+/* 实例库侧滑面板：fixed 脱离 .lab-body 网格流，不阻塞画布 */
+#library-panel {
+  position: fixed; top: 120px; right: 16px; bottom: 24px; width: 348px;
+  z-index: 60;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line-strong); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
+  padding: 14px;
+  display: flex; flex-direction: column;
+  transform: translateX(calc(100% + 24px));
+  transition: transform 200ms ease;
+}
+#library-panel.is-open { transform: translateX(0); }
+.lib-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.lib-head .panel-title { margin: 0; }
+.library-list { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 2px; }
+.lib-item {
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: 10px 12px;
+}
+.lib-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lib-name { font-size: 13.5px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-meta { font-size: 11.5px; color: var(--dim); font-family: var(--font-mono); }
+.lib-ops { display: flex; gap: 6px; }
+.lib-empty { padding: 12px 4px; }
+
+/* 自制模态（命名 / 确认）：Electron 渲染进程无 window.prompt / confirm */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 80;
+  background: rgba(4, 8, 12, 0.62);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal {
+  width: min(420px, calc(100vw - 48px));
+  background: linear-gradient(180deg, var(--panel-3), var(--panel-2));
+  border: 1px solid var(--line-strong); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
+  padding: 18px 20px;
+}
+.modal-title { font-size: 15px; color: var(--cyan); }
+.modal-input {
+  width: 100%; margin-top: 10px; padding: 9px 12px;
+  background: var(--bg-2); border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  color: var(--text); font: inherit; outline: none;
+}
+.modal-input:focus { border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan); }
+.modal-error { min-height: 18px; margin: 6px 0 0; font-size: 12px; color: var(--red); }
+.modal-text { margin: 10px 0 0; color: var(--muted); }
+.modal-ops { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+/* 轻提示 toast */
+.toast-root {
+  position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+  z-index: 90; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  background: rgba(10, 18, 24, 0.94); color: var(--text);
+  border: 1px solid var(--cyan); border-radius: 999px;
+  padding: 8px 18px; font-size: 13px; box-shadow: var(--shadow-2);
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+.toast.is-show { opacity: 1; transform: translateY(0); }
