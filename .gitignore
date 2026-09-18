@@ -27,3 +27,6 @@ Thumbs.db
 
 # ---- 工作区辅助文件 ----
 .workbuddy/
+git_*.txt
+git_*.log
+stage_check*.txt
