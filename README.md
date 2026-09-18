@@ -18,7 +18,7 @@
 
 ### 方式一：直接使用（推荐）
 
-从 [Releases](https://github.com/liao942287300-cyber/nms-power-sim/releases) 下载 `无人深空电力模拟器-x.x.x-portable.exe`，双击即用。便携版数据保存在 exe 旁边的 `NmsPowerSimData\` 目录，不污染系统，删掉 exe 即完全卸载。
+从 [Releases](https://github.com/liao942287300-cyber/nms-power-sim/releases) 下载 `NMS-PowerSim-x.x.x-portable.exe`，双击即用。（GitHub 的 Release 资产名只接受 ASCII，故下载包用英文名；本地自行构建的产物名仍为 `无人深空电力模拟器-x.x.x-portable.exe`，二者内容一致。）便携版数据保存在 exe 旁边的 `NmsPowerSimData\` 目录，不污染系统，删掉 exe 即完全卸载。
 
 ### 方式二：源码运行（纯前端）
 
