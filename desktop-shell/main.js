@@ -57,7 +57,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 const APP_NAME = '无人深空 · 电力模拟器';
-const APP_VERSION = '1.0.10';
+const APP_VERSION = '1.0.11';
 
 const isDev = !app.isPackaged;
 const userDataPath = app.getPath('userData');
@@ -209,7 +209,11 @@ function createWindow() {
   });
 
   // 下载时弹原生保存对话框（源应用有「导出 JSON」功能）
+  // 1.0.11 修复：必须先 preventDefault()。否则本处理器没有同步 setSavePath 时
+  // Electron 默认下载流程仍会执行并弹它自己的原生保存框，加上我们这个框就变成两个
+  // （用户实测「导出 JSON 弹两个文件保存位置窗口」即此因）。
   mainWindow.webContents.session.on('will-download', (e, item) => {
+    e.preventDefault();
     const suggested = item.getFilename();
     dialog.showSaveDialog(mainWindow, {
       defaultPath: suggested,

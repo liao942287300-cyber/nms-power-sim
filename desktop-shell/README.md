@@ -3,11 +3,12 @@
 把《无人深空》电力逻辑元件的教学 + 仿真工具（原生 HTML + CSS + ES Module 静态站点）
 封装为 **Windows 便携版 exe**：双击即用、独立窗口、无黑窗口、无浏览器、无需安装。
 
-当前版本：**1.0.10**
+当前版本：**1.0.11**
 
 ## 直接使用
 
-双击 `dist\无人深空电力模拟器-1.0.10-portable.exe` 即可（首次启动稍慢，属正常）。
+双击 `dist\无人深空电力模拟器-1.0.11-portable.exe` 即可（首次启动稍慢，属正常）。
+1.0.11 修复「导出 JSON 弹出两个文件保存窗口」的问题：现在只弹一个原生保存框。
 
 - 全部数据（窗口尺寸/位置等）保存在 **exe 同目录的 `NmsPowerSimData\`** 下，
   exe 和该目录一起拷贝到别的机器仍可用，卸载直接删除这两个即可。
@@ -64,7 +65,7 @@ npm run build:portable  :: 打便携版 exe，产物在 dist/
 
 ```bat
 node scripts\verify-cdp.mjs --mode dev --user-data .\.verify-data
-node scripts\verify-portable.mjs "dist\无人深空电力模拟器-1.0.10-portable.exe"
+node scripts\verify-portable.mjs "dist\无人深空电力模拟器-1.0.11-portable.exe"
 ```
 
 - `verify-cdp.mjs` 通过 CDP 真机断言：URL 协议、标题、三个页签、图鉴 **12** 卡、
