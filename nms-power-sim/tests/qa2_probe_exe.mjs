@@ -336,8 +336,10 @@ async function main() {
       st = await boardState();
       const icon = (elById(st, gf.id) || {}).icon || '';
       ok('T7e 图标出现黄色亮色 fill', icon.includes('#ffd23f'));
-      ok('T7f 图标出现低透明度光晕层 opacity=0.30', icon.includes('opacity="0.30"'));
-      ok('T7g 光晕为同色（fill=#ffd23f 且 opacity=0.30）', /opacity="0\.30"/.test(icon) && /fill="#ffd23f"[^>]*opacity="0\.30"|opacity="0\.30"[^>]*fill="#ffd23f"/.test(icon));
+      // 1.0.10：亮态 = 三层同色泛光（0.12/0.28/0.55）+ 白色高光芯
+      ok('T7f 泛光三层 opacity 0.12/0.28/0.55 齐全', ['0.12', '0.28', '0.55'].every((o) => icon.includes(`opacity="${o}"`)));
+      ok('T7g 泛光为同色（fill=#ffd23f 且 opacity=0.55）', /fill="#ffd23f"[^>]*opacity="0\.55"/.test(icon));
+      ok('T7g2 白色高光芯存在（#ffffff opacity=0.45）', icon.includes('fill="#ffffff"') && icon.includes('opacity="0.45"'));
       const es = await engineState();
       eq('T7h 引擎：发光地板 lit=true', engineEl(es, gf.id).state.lit, true);
       eq('T7i 引擎：类型 = glow_floor', engineEl(es, gf.id).type, 'glow_floor');

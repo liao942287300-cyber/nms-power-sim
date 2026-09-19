@@ -495,9 +495,13 @@ async function G9_glowFloorE2E() {
   st = await boardState();
   const icon = (elById(st, gf.id) || {}).icon || '';
   const YELLOW_ON = '#ffd23f';
+  // 1.0.10：亮态 = 三层同色泛光（外→内 opacity 0.12/0.28/0.55，尺寸递减）+ 白色高光芯 + on 色本体
   ok('G9 图标出现黄色亮色 fill', icon.includes(YELLOW_ON), `含 ${YELLOW_ON}=${icon.includes(YELLOW_ON)}`);
-  ok('G9 图标出现低透明度光晕层（opacity=0.30）', icon.includes('opacity="0.30"'));
-  ok('G9 光晕为同色（fill 与亮色一致）', /opacity="0\.30"/.test(icon) && /fill="#ffd23f"[^>]*opacity="0\.30"|opacity="0\.30"[^>]*fill="#ffd23f"/.test(icon), icon.slice(0, 160));
+  for (const o of ['0.12', '0.28', '0.55']) {
+    ok(`G9 泛光层 opacity=${o} 存在`, icon.includes(`opacity="${o}"`));
+  }
+  ok('G9 泛光为同色（fill 与亮色一致）', /fill="#ffd23f"[^>]*opacity="0\.55"/.test(icon), icon.slice(0, 200));
+  ok('G9 白色高光芯存在（#ffffff opacity=0.45）', icon.includes('fill="#ffffff"') && icon.includes('opacity="0.45"'));
   const es = await engineState();
   eq('G9 引擎：发光地板 lit=true', engineEl(es, gf.id).state.lit, true);
   eq('G9 引擎：发光地板类型正确', engineEl(es, gf.id).type, 'glow_floor');

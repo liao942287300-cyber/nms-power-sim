@@ -18,10 +18,18 @@ export const DELAY_TEXT =
   '若目标状态在 1 秒内又变回去，则倒计时清零重新计时。';
 
 /**
- * 发光颜色调色板（1.0.9）：灯柱 lamp 与发光地板 glow_floor 共用。
+ * 未点亮时的中性本体色（1.0.10）。
+ * 刻意不带任何色相：灭态一旦沿用该色的高饱和暗色，在 1× 尺寸下就会像"暗一点的亮灯"，
+ * 这是用户反馈"亮灭难分辨"的根因。灭态只保留一圈细色环来提示"它是哪一色"。
+ */
+const UNLIT_FILL = '#2a3641';
+
+/**
+ * 发光颜色调色板：灯柱 lamp 与发光地板 glow_floor 共用。
  *   - 顺序即 UI 展示顺序（与 engine.LIGHT_COLOR_KEYS 一致）：绿 / 粉 / 黄 / 蓝 / 紫 / 白 / 红。
- *   - on  = 通电点亮时的亮色；off = 断电熄灭时的暗色（同色系暗化版，
- *           保证断电时也能一眼辨认选了哪个颜色）。
+ *   - on  = 通电点亮时的亮色。
+ *   - off = （1.0.10 起）灭态「细色环」的颜色：本体一律用中性的 UNLIT_FILL，
+ *           仅靠这圈 off 色细描边提示"它是哪一色"，从而让亮/灭在形态上就分得开。
  * 说明：光晕一律用「额外一层低透明度同色图形」实现，禁止 CSS filter: drop-shadow /
  * blur —— 1.0.6 已因大灯阵的滤镜开销把导线滤镜删除，LOVE 灯阵有 43 盏灯，滤镜会拖垮交互。
  */
@@ -213,42 +221,54 @@ function iconSolarPanel(v) {
 }
 
 /**
- * 输出端（灯柱）：圆柱形灯柱。1.0.9 起颜色可选（props.color，缺省黄）：
- *   亮 = on 色 + 同色半透明光晕；灭 = off 色 + 无光晕。
- * 光晕用「额外一层低透明度同色放大矩形」实现，禁止 CSS filter（LOVE 灯阵 43 盏灯）。
+ * 输出端（灯柱）：圆柱形灯柱。1.0.10 起重做亮灭视觉（颜色可选，props.color，缺省黄）：
+ *   亮 = on 色本体 + 三层同色泛光 + 白色高光芯；
+ *   灭 = 中性深灰本体（UNLIT_FILL）+ 一圈 off 色细色环。
+ * 亮/灭在「形态」上就不同（泛光+高光 vs 深灰+色环），而不是只差一个亮度。
+ * 泛光用「额外多层低透明度同色图形」实现，禁止 CSS filter（LOVE 灯阵 43 盏灯）。
  */
 function iconLamp(v) {
   const on = !!v.state.lit;
   const c = resolveColor(v.props && v.props.color);
-  const fill = on ? c.on : c.off;
   let svg = '';
   if (on) {
-    svg += `<rect x="-21" y="-40" width="42" height="74" rx="21" fill="${c.on}" opacity="0.30"/>`;
+    // 三层同色泛光：由外向内透明度递增（外弱内强）才读成「光」；
+    // 单层 30% 透明同色块叠在近黑底上比本体更暗，只会读成脏描边（1.0.9 的老问题）。
+    svg += `<rect x="-24" y="-43" width="48" height="86" rx="24" fill="${c.on}" opacity="0.12"/>`;
+    svg += `<rect x="-21" y="-40" width="42" height="80" rx="21" fill="${c.on}" opacity="0.28"/>`;
+    svg += `<rect x="-18" y="-37" width="36" height="74" rx="18" fill="${c.on}" opacity="0.55"/>`;
   }
-  svg +=
-    `<rect x="-15" y="-34" width="30" height="62" rx="15" fill="${fill}" stroke="#0b0f13" stroke-width="4"/>` +
-    `<path d="M-15 -14 H15 M-15 6 H15 M-15 26 H15" stroke="#0b0f13" stroke-width="2.4" opacity="0.5"/>`;
+  svg += `<rect x="-15" y="-34" width="30" height="62" rx="15" fill="${on ? c.on : UNLIT_FILL}" stroke="#0b0f13" stroke-width="4"/>`;
+  svg += on
+    ? `<rect x="-7" y="-26" width="14" height="46" rx="7" fill="#ffffff" opacity="0.5"/>`
+    : `<rect x="-8" y="-26" width="16" height="46" rx="8" fill="none" stroke="${c.off}" stroke-width="2.5"/>`;
+  svg += `<path d="M-15 -14 H15 M-15 6 H15 M-15 26 H15" stroke="#0b0f13" stroke-width="2.4" opacity="0.5"/>`;
   return svg;
 }
 
 /**
- * 发光地板（1.0.9）：正方形发光板——深色方形底座 + 内嵌正方形发光面。
- *   亮 = on 色 + 外围同色半透明光晕；灭 = off 色 + 无光晕。
+ * 发光地板：正方形发光板——深色方形底座 + 内嵌正方形发光面。
+ *   1.0.10 起重做亮灭视觉：
+ *   亮 = on 色发光面 + 三层同色泛光（画在底座 ±44 之外，否则整层被不透明底座盖住）+ 白色高光芯；
+ *   灭 = 中性深灰发光面（UNLIT_FILL）+ 一圈 off 色细色环 + 无泛光。
  * 电气属性与输出端（灯柱）完全一致（1 个 in 端口，通电即亮 / 断电即灭）。
  * 与地面开关 floor_switch 无关：不参与玩家踩踏感应。
  */
 function iconGlowFloor(v) {
   const on = !!v.state.lit;
   const c = resolveColor(v.props && v.props.color);
-  const face = on ? c.on : c.off;
   let svg = '';
   if (on) {
-    // 光晕：额外一层低透明度同色图形（同上，禁止滤镜）
-    svg += `<rect x="-50" y="-50" width="100" height="100" rx="16" fill="${c.on}" opacity="0.30"/>`;
+    // 泛光必须画在底座（±44）之外，否则整层被不透明底座盖住（1.0.9 的老问题）
+    svg += `<rect x="-56" y="-56" width="112" height="112" rx="20" fill="${c.on}" opacity="0.12"/>`;
+    svg += `<rect x="-52" y="-52" width="104" height="104" rx="17" fill="${c.on}" opacity="0.28"/>`;
+    svg += `<rect x="-48" y="-48" width="96" height="96" rx="14" fill="${c.on}" opacity="0.55"/>`;
   }
-  svg +=
-    `<rect x="-44" y="-44" width="88" height="88" rx="12" fill="#141c24" stroke="#0b0f13" stroke-width="4"/>` +
-    `<rect x="-34" y="-34" width="68" height="68" rx="8" fill="${face}" stroke="#0b0f13" stroke-width="3"/>`;
+  svg += `<rect x="-44" y="-44" width="88" height="88" rx="12" fill="#141c24" stroke="#0b0f13" stroke-width="4"/>`;
+  svg += `<rect x="-34" y="-34" width="68" height="68" rx="8" fill="${on ? c.on : UNLIT_FILL}" stroke="#0b0f13" stroke-width="3"/>`;
+  svg += on
+    ? `<rect x="-16" y="-16" width="32" height="32" rx="6" fill="#ffffff" opacity="0.45"/>`
+    : `<rect x="-26" y="-26" width="52" height="52" rx="6" fill="none" stroke="${c.off}" stroke-width="3"/>`;
   return svg;
 }
 

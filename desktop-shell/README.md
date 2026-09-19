@@ -3,11 +3,11 @@
 把《无人深空》电力逻辑元件的教学 + 仿真工具（原生 HTML + CSS + ES Module 静态站点）
 封装为 **Windows 便携版 exe**：双击即用、独立窗口、无黑窗口、无浏览器、无需安装。
 
-当前版本：**1.0.9**
+当前版本：**1.0.10**
 
 ## 直接使用
 
-双击 `dist\无人深空电力模拟器-1.0.9-portable.exe` 即可（首次启动稍慢，属正常）。
+双击 `dist\无人深空电力模拟器-1.0.10-portable.exe` 即可（首次启动稍慢，属正常）。
 
 - 全部数据（窗口尺寸/位置等）保存在 **exe 同目录的 `NmsPowerSimData\`** 下，
   exe 和该目录一起拷贝到别的机器仍可用，卸载直接删除这两个即可。
@@ -34,6 +34,7 @@
 | `Ctrl` + `Z` / `Ctrl` + `Y` | 撤销 / 重做（含改色、复制，逐步可撤销） |
 
 灯柱与发光地板的发光颜色可在属性面板切换绿 / 粉 / 黄 / 蓝 / 紫 / 白 / 红，多选时可批量改色。
+1.0.10 起亮 / 灭在形态上即不同：点亮 = 三层同色泛光 + 白色高光芯，熄灭 = 中性深灰本体 + 一圈同色细色环，密集灯阵下也能一眼分辨。
 
 ## 开发者：如何构建
 
@@ -63,7 +64,7 @@ npm run build:portable  :: 打便携版 exe，产物在 dist/
 
 ```bat
 node scripts\verify-cdp.mjs --mode dev --user-data .\.verify-data
-node scripts\verify-portable.mjs "dist\无人深空电力模拟器-1.0.9-portable.exe"
+node scripts\verify-portable.mjs "dist\无人深空电力模拟器-1.0.10-portable.exe"
 ```
 
 - `verify-cdp.mjs` 通过 CDP 真机断言：URL 协议、标题、三个页签、图鉴 **12** 卡、

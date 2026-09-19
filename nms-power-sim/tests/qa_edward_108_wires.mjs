@@ -250,7 +250,8 @@ const B_FN = `
 
     board.setWiresHidden(true);
     board.render();
-    // 点亮灯 = 图标填充色 #ffd23f（iconLamp：亮 #ffd23f / 灭 #9aa4ad）
+    // 点亮灯 = 图标填充色 #ffd23f（1.0.10 iconLamp：亮本体 #ffd23f，泛光层同色；
+    // 灭 = 中性深灰 #2a3641 + off 色细色环）。同一盏灯可能命中多个同色 rect（泛光层），故用 Set 去重。
     const litMapFromDom = () => {
       const s = new Set();
       for (const n of svg.querySelectorAll('.element-lamp rect[fill="#ffd23f"]')) {
