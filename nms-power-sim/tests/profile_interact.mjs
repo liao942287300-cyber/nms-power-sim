@@ -80,14 +80,14 @@ async function js(page, expr) {
   return r.result.value;
 }
 const mouse = (page, type, x, y, o = {}) => page.send('Input.dispatchMouseEvent', { type, x, y, button: o.button ?? 'left', buttons: o.buttons ?? 0, clickCount: o.clickCount ?? 1, pointerType: 'mouse', modifiers: o.modifiers ?? 0, deltaX: 0, deltaY: o.deltaY ?? 0 });
-async function drag(page, from, to, steps = 10) {
-  await mouse(page, 'mouseMoved', from.x, from.y);
-  await mouse(page, 'mousePressed', from.x, from.y, { buttons: 1 });
+async function drag(page, from, to, steps = 10, modifiers = 0) {
+  await mouse(page, 'mouseMoved', from.x, from.y, { modifiers });
+  await mouse(page, 'mousePressed', from.x, from.y, { buttons: 1, modifiers });
   for (let i = 1; i <= steps; i++) {
-    await mouse(page, 'mouseMoved', from.x + (to.x - from.x) * i / steps, from.y + (to.y - from.y) * i / steps, { buttons: 1 });
+    await mouse(page, 'mouseMoved', from.x + (to.x - from.x) * i / steps, from.y + (to.y - from.y) * i / steps, { buttons: 1, modifiers });
     await sleep(8);
   }
-  await mouse(page, 'mouseReleased', to.x, to.y);
+  await mouse(page, 'mouseReleased', to.x, to.y, { modifiers });
   await sleep(40);
 }
 async function click(page, x, y) {
@@ -195,10 +195,10 @@ try {
   for (let i = 0; i < 25; i++) {
     await click(page, cx + (Math.random() - 0.5) * R.width * 0.8, cy + (Math.random() - 0.5) * R.height * 0.8);
   }
-  // 框选（左右、右左）
+  // 框选（左右、右左）——1.0.9：框选需按住 Ctrl（modifiers=2）
   for (let i = 0; i < 6; i++) {
     const a = { x: cx - 200 + Math.random() * 100, y: cy - 150 + Math.random() * 80 };
-    await drag(page, a, { x: a.x + 300 + Math.random() * 100, y: a.y + 220 });
+    await drag(page, a, { x: a.x + 300 + Math.random() * 100, y: a.y + 220 }, 10, 2);
   }
   // 元件拖拽（从随机点拖 120px）
   for (let i = 0; i < 10; i++) {
@@ -208,8 +208,12 @@ try {
   // 滚轮缩放（放大 + 缩小）
   for (let i = 0; i < 20; i++) await wheel(page, cx, cy, -120);
   for (let i = 0; i < 20; i++) await wheel(page, cx, cy, 120);
-  // 平移
-  await drag(page, { x: cx, y: cy }, { x: cx + 150, y: cy - 90 });
+  // 平移（1.0.9：空白处直接拖动 = 平移；从空白点起拖，避免命中元件变成元件拖拽）
+  const bp = await js(page, `const b=document.getElementById('board');const r=b.getBoundingClientRect();
+    for(let fy=0.7;fy<=0.95;fy+=0.1)for(let fx=0.08;fx<=0.92;fx+=0.08){const x=r.left+r.width*fx,y=r.top+r.height*fy;
+    const el=document.elementFromPoint(x,y);if(el&&!(el.closest&&el.closest('[data-el]'))&&(el===b||b.contains(el)))return {x,y};}
+    return {x:r.left+r.width*0.5,y:r.top+r.height*0.92};`);
+  await drag(page, bp, { x: bp.x + 150, y: bp.y - 90 });
   const profB = await page.send('Profiler.stop');
   const framesB = await js(page, FRAME_SAMPLER_OFF);
   const aggB = aggregate(profB.profile);

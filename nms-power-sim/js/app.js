@@ -6,8 +6,8 @@
  * ---------------------------------------------------------------------------
  */
 
-import { createEngine, FIXED_DT, MAX_STEPS } from './engine.js';
-import { GEOMETRY, drawIcon, ELEMENTS, EL_BY_ID, PALETTE_ORDER, RULE_TEXT, DELAY_TEXT } from './catalog.js';
+import { createEngine, FIXED_DT, MAX_STEPS, LIGHT_COLOR_KEYS } from './engine.js';
+import { GEOMETRY, drawIcon, ELEMENTS, EL_BY_ID, PALETTE_ORDER, RULE_TEXT, DELAY_TEXT, LIGHT_COLORS } from './catalog.js';
 import { PRESETS, loadPreset } from './presets.js';
 import { createBoard } from './board.js';
 
@@ -355,11 +355,45 @@ dom.board.addEventListener('drop', (e) => {
 
 /* --------------------------- 属性 / 状态面板 --------------------------- */
 
+/* ---------------------- 发光颜色选择（1.0.9） ---------------------- */
+/**
+ * 生成一行「发光颜色」色块（1.0.9，单选 / 多选共用）：点击即对所有目标批量改色。
+ * 撤销语义：每次点到「不同于当前色」的颜色各压一次快照，因此可逐级撤销；
+ * 点当前已选色视为空操作（不压快照、不改色、不重渲染）。
+ * @param {Array<object>} targets 目标元件（lamp / glow_floor，可多个）
+ * @returns {HTMLElement} 色块行容器
+ */
+function buildColorRow(targets) {
+  const row = document.createElement('div');
+  row.className = 'color-row';
+  const currentColor = (targets[0] && LIGHT_COLORS[targets[0].props.color]) ? targets[0].props.color : 'yellow';
+  for (const key of LIGHT_COLOR_KEYS) {
+    const c = LIGHT_COLORS[key];
+    const sw = document.createElement('button');
+    sw.type = 'button';
+    sw.className = `color-swatch${key === currentColor ? ' is-active' : ''}`;
+    sw.dataset.color = key;
+    sw.title = c.name;
+    sw.setAttribute('aria-label', c.name);
+    sw.innerHTML = `<span class="color-swatch-dot"></span><span class="color-swatch-name">${c.name}</span>`;
+    sw.querySelector('.color-swatch-dot').style.setProperty('--sw', c.on);
+    sw.addEventListener('click', () => {
+      if (key === currentColor) return; // 点当前已选色 = 空操作，不压快照、不改、不重渲染
+      pushHistory(); // 每次改色各压一次快照 → 逐级可撤销
+      for (const el of targets) engine.setColor(el.id, key);
+      board.render();
+      renderInspectorProps(); // 重渲染属性面板，让当前色高亮跟上
+    });
+    row.appendChild(sw);
+  }
+  return row;
+}
+
 function renderInspectorProps() {
   const sel = board.getSelection();
   dom.inspectorProps.innerHTML = '';
   if (!sel) {
-    dom.inspectorProps.innerHTML = '<p class="muted small">未选择任何元件。点击画布中的元件查看属性；空白处拖动可框选多个元件。</p>';
+    dom.inspectorProps.innerHTML = '<p class="muted small">未选择任何元件。点击画布中的元件查看属性；空白处拖动平移画布，Ctrl+拖动可框选多个元件。</p>';
     return;
   }
   if (sel.kind === 'multi') {
@@ -385,6 +419,17 @@ function renderInspectorProps() {
       renderInspectorStatus();
     });
     dom.inspectorProps.appendChild(del);
+    // 1.0.9：选择集含 lamp / glow_floor → 显示颜色行，点击对全部目标批量改色（LOVE 灯阵 43 盏一次改完）
+    const colorTargets = sel.ids
+      .map((id) => engine.getElement(id))
+      .filter((e) => e && (e.type === 'lamp' || e.type === 'glow_floor'));
+    if (colorTargets.length) {
+      const field = document.createElement('div');
+      field.className = 'field';
+      field.innerHTML = `<span>发光颜色（批量 · 共 ${colorTargets.length} 个）</span>`;
+      field.appendChild(buildColorRow(colorTargets));
+      dom.inspectorProps.appendChild(field);
+    }
     return;
   }
   if (sel.kind === 'wire') {
@@ -472,6 +517,15 @@ function renderInspectorProps() {
     });
     dom.inspectorProps.appendChild(btn);
   }
+
+  // 1.0.9：灯柱 / 发光地板 → 显示一行 7 个色块，点击即改色
+  if (elem.type === 'lamp' || elem.type === 'glow_floor') {
+    const field = document.createElement('div');
+    field.className = 'field';
+    field.innerHTML = '<span>发光颜色</span>';
+    field.appendChild(buildColorRow([elem]));
+    dom.inspectorProps.appendChild(field);
+  }
 }
 
 /** 时刻（小时，0–24）→ 'HH:MM'，含 60 分钟进位。 */
@@ -506,7 +560,7 @@ let statusOrderKey = '';        // 上次行顺序指纹（view.id 串联）
 function statusViewText(v) {
   if (v.type === 'power') return v.state.on === false ? '已关断' : '持续供电';
   if (v.type === 'solar_panel') return v.supplying ? '白天 · 供电中' : '夜晚 · 停止';
-  if (v.type === 'lamp') return v.lit ? '点亮' : '熄灭';
+  if (v.type === 'lamp' || v.type === 'glow_floor') return v.lit ? '点亮' : '熄灭'; // 1.0.9：灯柱 / 发光地板共用
   if (v.type === 'door') return v.open ? '打开（通行）' : '关闭（拦截）';
   if (v.type === 'player') return '位置令牌';
   return v.conducting ? '接通' : '切断';
@@ -1257,6 +1311,11 @@ function statusLoop(ts) {
 /* ============================ 键盘快捷键 ============================ */
 
 window.addEventListener('keydown', (e) => {
+  // 1.0.9：按住 Ctrl/⌘ 时给画布加 is-marquee-ready 类（十字光标提示「可框选」）。
+  // 放在文本输入框拦截之前——它是纯光标状态提示，须始终反映 Ctrl 物理状态。
+  if (e.key === 'Control' && dom.canvasWrap) {
+    dom.canvasWrap.classList.add('is-marquee-ready');
+  }
   const tag = (e.target && e.target.tagName) || '';
   if (tag === 'INPUT' || tag === 'TEXTAREA') return; // 文本输入框聚焦时不触发（模态输入不受影响）
   if ((e.ctrlKey || e.metaKey) && !e.altKey) {
@@ -1290,25 +1349,27 @@ window.addEventListener('keydown', (e) => {
       dom.canvasWrap.classList.remove('is-armed');
     }
   } else if (e.key === ' ') {
-    // 空格改为「按住 = 平移准备」，单击（未用于平移）仍切换播放 / 暂停
+    // 1.0.9：空格 = 显示 / 隐藏线条（长按不反复切换）。同步 board（O(1) 类切换）、
+    // engine（随序列化保存）与工具条按钮高亮。
     e.preventDefault();
-    if (!e.repeat) board.setSpaceDown(true);
+    if (e.repeat) return;
+    const next = !board.getWiresHidden();
+    board.setWiresHidden(next);
+    engine.setWiresHidden(next);
+    syncWiresHiddenUI();
   }
 });
 
 window.addEventListener('keyup', (e) => {
-  const tag = (e.target && e.target.tagName) || '';
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-  if (e.key === ' ') {
-    board.setSpaceDown(false);
-    // 若本轮空格被用于拖拽平移，则只复位标记、不切换播放 / 暂停
-    if (!board.consumeSpacePan()) dom.btnRun.click();
+  // 1.0.9：松开 Ctrl/⌘ 移除 is-marquee-ready 类（不拦截输入框，避免残留态）。
+  if (e.key === 'Control' && dom.canvasWrap) {
+    dom.canvasWrap.classList.remove('is-marquee-ready');
   }
 });
 
-// 窗口失焦时复位空格状态，避免「按住空格 + 切窗」后卡在平移准备态
+// 窗口失焦时复位「框选准备」类，避免「按住 Ctrl + 切窗」后卡在十字光标态
 window.addEventListener('blur', () => {
-  board.setSpaceDown(false);
+  if (dom.canvasWrap) dom.canvasWrap.classList.remove('is-marquee-ready');
 });
 
 /* ============================ 启动 ============================ */

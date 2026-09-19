@@ -13,7 +13,7 @@
  *   - URL 以 app://local/ 开头
  *   - 页面标题正确
  *   - 顶部三个视图页签（元件图鉴 / 仿真实验室 / 应用实例）都在
- *   - 元件图鉴渲染出 11 张卡片
+ *   - 元件图鉴渲染出 12 张卡片（1.0.9 起含「发光地板」）
  *   - 应用实例渲染出 7 张卡片，且 7 张参考图 naturalWidth > 0（治相对路径/MIME）
  *   - 载入「流水灯」预设并播放 12 秒，灯态至少出现 3 种不同组合
  *   - console error / 未捕获异常 / 失败请求 均为 0
@@ -31,7 +31,7 @@ const PROJECT_ROOT = path.resolve(here, '..');
 
 const EXPECT_TITLE = '无人深空 · 电力模拟器';
 const EXPECT_NAV = 3;
-const EXPECT_CATALOG_CARDS = 11; // 含新增「太阳能板」（catalog 11 卡）
+const EXPECT_CATALOG_CARDS = 12; // 1.0.9：新增「发光地板」glow_floor（原 11 卡 → 12 卡）
 const EXPECT_PRESET_CARDS = 7;   // 含新增「太阳能板昼夜供电」实例（presets 7 个）
 const PLAY_SECONDS = 12;
 const MIN_DISTINCT_LAMP_STATES = 3;
@@ -249,7 +249,7 @@ async function main() {
     await loadPromise;
     log('reload 完成');
 
-    // 5. 等待应用就绪（图鉴 11 张卡片渲染完成）
+    // 5. 等待应用就绪（图鉴 12 张卡片渲染完成）
     let ready = false;
     while (Date.now() < deadline) {
       try {
@@ -328,6 +328,9 @@ async function main() {
     }
 
     // 9. 播放 12 秒并采样灯态（点亮 = lamp 图标 rect fill === #ffd23f）
+    //    注意（1.0.9）：灯柱颜色已可选（props.color，7 色），这里判「点亮」用的是
+    //    默认黄色 #ffd23f；预设电路的灯都是默认黄色，故仍成立。若日后改了预设灯色
+    //    或新增彩色灯阵，必须同步改这里的判色，否则彩色灯会被误判为熄灭。
     const sampleExpr = `(() => {
       const groups = [...document.querySelectorAll('#board .element-lamp')];
       const lit = groups.map(g => [...g.querySelectorAll('rect')]

@@ -129,7 +129,7 @@ async function e1Marquee() {
   eq('E1-0 预置电路就位（2 导线）', st.wires.length, 2);
 
   // E1.1 左→右框选：世界 (10,10)-(760,240) → 完全包含 p/s1/l，排除 s2
-  await drag(w2c(st, 10, 10), w2c(st, 760, 240), 12);
+  await drag(w2c(st, 10, 10), w2c(st, 760, 240), 12, { modifiers: 2 }); // 1.0.9：框选需 Ctrl
   st = await readBoard();
   eq('E1.1 左→右框选命中数=3', st.sel.length, 3);
   ok('E1.1 命中成员恰为 l/p/s1（s2 不在内）', JSON.stringify(st.sel) === JSON.stringify(['l', 'p', 's1']), JSON.stringify(st.sel));
@@ -161,7 +161,7 @@ async function e1Marquee() {
   eq('E1.3 再次 Shift+点击减选 → 3 个', st.sel.length, 3);
 
   // E1.4 点击已选中元件：保持选择集
-  await click(w2c(st, pos1.s1.x, pos1.s1.y).x, w2c(st, pos1.s1.y, pos1.s1.y).y);
+  await click(w2c(st, pos1.s1.x, pos1.s1.y).x, w2c(st, pos1.s1.x, pos1.s1.y).y);
   st = await readBoard();
   eq('E1.4 点击已选中元件后选择集仍为 3', st.sel.length, 3);
   ok('E1.4 检查器切到被点元件属性（墙壁开关）', st.insp.includes('墙壁开关'), st.insp.slice(0, 24));
@@ -175,13 +175,13 @@ async function e1Marquee() {
   await clearCanvas();
   await importJSON({ elements: [{ id: 'l1', type: 'lamp', x: 120, y: 120 }, { id: 'l2', type: 'lamp', x: 360, y: 120 }], wires: [], timeOfDay: 8, dayCycle: false }, 'e1rl');
   st = await readBoard();
-  await drag(w2c(st, 480, 200), w2c(st, 200, 40), 10);
+  await drag(w2c(st, 480, 200), w2c(st, 200, 40), 10, { modifiers: 2 });
   st = await readBoard();
   eq('E1.6 右→左相交框选命中数=1', st.sel.length, 1);
   ok('E1.6 命中的是 l2（部分相交即选中）', JSON.stringify(st.sel) === JSON.stringify(['l2']), JSON.stringify(st.sel));
   // 左→右半包含框：框 (200,100)-(400,200) 纵向切过 l2（87..153 未完全落入）→ 0 个
   await ESC();
-  await drag(w2c(st, 200, 100), w2c(st, 400, 200), 10);
+  await drag(w2c(st, 200, 100), w2c(st, 400, 200), 10, { modifiers: 2 });
   st = await readBoard();
   eq('E1.6 左→右半包含框（l2 未完全落入）命中 0 个', st.sel.length, 0);
 
@@ -189,7 +189,7 @@ async function e1Marquee() {
   await clearCanvas();
   await importJSON(E1_CIRCUIT, 'e1del');
   st = await readBoard();
-  await drag(w2c(st, 10, 10), w2c(st, 760, 240), 12);
+  await drag(w2c(st, 10, 10), w2c(st, 760, 240), 12, { modifiers: 2 }); // 1.0.9：框选需 Ctrl
   st = await readBoard();
   eq('E1.7 框选 3 个后 Delete', st.sel.length, 3);
   await DEL();
@@ -207,22 +207,25 @@ async function e8Conflicts() {
   await importJSON(E1_CIRCUIT, 'e8');
   let st = await readBoard();
   // 建立选择集 p/s1/l
-  await drag(w2c(st, 10, 10), w2c(st, 760, 240), 12);
+  await drag(w2c(st, 10, 10), w2c(st, 760, 240), 12, { modifiers: 2 }); // 1.0.9：框选需 Ctrl
   st = await readBoard();
   eq('E8-0 建立选择集 3 个', st.sel.length, 3);
   const posA = {}; for (const e of st.els) posA[e.id] = { x: e.x, y: e.y };
   const viewA = { ...st.view };
 
-  // E8.1 空格按住 + 拖拽 → 平移而非框选；选择集保持；元件不动
-  await kd(' ', 'Space', 32);
-  await drag({ x: st.rect.l + 400, y: st.rect.t + 300 }, { x: st.rect.l + 510, y: st.rect.t + 250 }, 10);
+  // E8.1 空白处拖动 → 平移而非框选（1.0.9：空格已不再是平移修饰键）；选择集保持；元件不动
+  const bp8 = await js(`const b=document.getElementById('board');const r=b.getBoundingClientRect();
+    for(let fy=0.15;fy<=0.9;fy+=0.08)for(let fx=0.12;fx<=0.9;fx+=0.08){const x=r.left+r.width*fx,y=r.top+r.height*fy;
+    const el=document.elementFromPoint(x,y);if(el&&!(el.closest&&el.closest('[data-el]'))&&(el===b||b.contains(el)))return {x,y};}return null;`);
+  ok('E8.1 找到空白平移起点', !!bp8, JSON.stringify(bp8));
+  await drag(bp8, { x: bp8.x + 110, y: bp8.y - 50 }, 10);
   st = await readBoard();
-  ok('E8.1 空格拖拽期间视图发生平移', Math.abs(st.view.tx - viewA.tx) > 30 || Math.abs(st.view.ty - viewA.ty) > 30,
+  ok('E8.1 空白拖动期间视图发生平移', Math.abs(st.view.tx - viewA.tx) > 30 || Math.abs(st.view.ty - viewA.ty) > 30,
     `t0=(${viewA.tx},${viewA.ty}) t1=(${st.view.tx},${st.view.ty})`);
   eq('E8.1 平移后选择集保持 3 个', st.sel.length, 3);
   const posB = {}; for (const e of st.els) posB[e.id] = { x: e.x, y: e.y };
   ok('E8.1 平移不移动任何元件', Object.keys(posA).every((id) => posA[id].x === posB[id].x && posA[id].y === posB[id].y));
-  await ku(' ', 'Space', 32); await sleep(150);
+  await sleep(150);
 
   // E8.2 滚轮缩放：选择集保持
   const kA = st.view.k;

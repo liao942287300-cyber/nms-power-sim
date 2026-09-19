@@ -7,11 +7,13 @@ renderer/
 # ---- 便携版运行时数据 ----
 NmsPowerSimData/
 
-# ---- 测试运行日志 ----
-tests/*.txt
-tests/*.log
-tests/*.exit
+# ---- 测试运行日志与临时产物（任意层级；带斜杠的模式是锚定仓库根的，故用 ** 前缀）----
 *.log
+**/tests/*.txt
+**/tests/*.exit
+
+# ---- 渲染端源码目录内的 QA 运行日志（qa_browser.txt / qa_engine.txt / qa_edward*.txt …）----
+nms-power-sim/qa_*.txt
 
 # ---- QA 证据目录（本地留存，不入库）----
 qa-evidence/

@@ -1,6 +1,6 @@
 {
   "name": "nms-power-sim-desktop",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "无人深空 · 电力模拟器 · Windows 便携桌面客户端",
   "main": "main.js",
   "private": true,

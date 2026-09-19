@@ -18,6 +18,29 @@ export const DELAY_TEXT =
   '若目标状态在 1 秒内又变回去，则倒计时清零重新计时。';
 
 /**
+ * 发光颜色调色板（1.0.9）：灯柱 lamp 与发光地板 glow_floor 共用。
+ *   - 顺序即 UI 展示顺序（与 engine.LIGHT_COLOR_KEYS 一致）：绿 / 粉 / 黄 / 蓝 / 紫 / 白 / 红。
+ *   - on  = 通电点亮时的亮色；off = 断电熄灭时的暗色（同色系暗化版，
+ *           保证断电时也能一眼辨认选了哪个颜色）。
+ * 说明：光晕一律用「额外一层低透明度同色图形」实现，禁止 CSS filter: drop-shadow /
+ * blur —— 1.0.6 已因大灯阵的滤镜开销把导线滤镜删除，LOVE 灯阵有 43 盏灯，滤镜会拖垮交互。
+ */
+export const LIGHT_COLORS = {
+  green: { name: '绿', on: '#2fd06a', off: '#2c5c3f' },
+  pink: { name: '粉', on: '#ff6fb5', off: '#7a3a58' },
+  yellow: { name: '黄', on: '#ffd23f', off: '#8a7328' },
+  blue: { name: '蓝', on: '#3ea8ff', off: '#22527d' },
+  purple: { name: '紫', on: '#b57bff', off: '#573a7d' },
+  white: { name: '白', on: '#ffffff', off: '#8a949c' },
+  red: { name: '红', on: '#ff5a4d', off: '#7d2b26' },
+};
+
+/** 取颜色定义；缺省 / 非法 key 回退黄色（yellow），保证任何 props 都能画出图标。 */
+function resolveColor(key) {
+  return (key && LIGHT_COLORS[key]) ? LIGHT_COLORS[key] : LIGHT_COLORS.yellow;
+}
+
+/**
  * 几何：元件包围盒尺寸 + 端口相对偏移（相对元件中心）。
  * dir 仅用于导线出线方向的视觉修饰。
  */
@@ -25,6 +48,8 @@ export const GEOMETRY = {
   power: { w: 56, h: 60, ports: { out: { dx: 0, dy: 30, dir: 'down' } } },
   solar_panel: { w: 76, h: 64, ports: { out: { dx: 38, dy: 0, dir: 'right' } } },
   lamp: { w: 40, h: 66, ports: { in: { dx: 0, dy: 34, dir: 'down' } } },
+  // 1.0.9 发光地板：正方形发光板（88×88），1 个底部输入端口，电气属性同灯柱。
+  glow_floor: { w: 88, h: 88, ports: { in: { dx: 0, dy: 46, dir: 'down' } } },
   door: { w: 96, h: 118, ports: { in: { dx: 0, dy: -60, dir: 'up' } } },
   wall_switch: { w: 60, h: 58, ports: { a: { dx: -34, dy: 4, dir: 'left' }, b: { dx: 34, dy: 4, dir: 'right' } } },
   prox_switch: { w: 60, h: 56, ports: { a: { dx: -34, dy: 0, dir: 'left' }, b: { dx: 34, dy: 0, dir: 'right' } } },
@@ -187,14 +212,44 @@ function iconSolarPanel(v) {
   );
 }
 
-/** 输出端（灯柱）：圆柱形灯柱，黄=亮，灰=灭。 */
+/**
+ * 输出端（灯柱）：圆柱形灯柱。1.0.9 起颜色可选（props.color，缺省黄）：
+ *   亮 = on 色 + 同色半透明光晕；灭 = off 色 + 无光晕。
+ * 光晕用「额外一层低透明度同色放大矩形」实现，禁止 CSS filter（LOVE 灯阵 43 盏灯）。
+ */
 function iconLamp(v) {
   const on = !!v.state.lit;
-  const fill = on ? '#ffd23f' : '#9aa4ad';
-  return (
+  const c = resolveColor(v.props && v.props.color);
+  const fill = on ? c.on : c.off;
+  let svg = '';
+  if (on) {
+    svg += `<rect x="-21" y="-40" width="42" height="74" rx="21" fill="${c.on}" opacity="0.30"/>`;
+  }
+  svg +=
     `<rect x="-15" y="-34" width="30" height="62" rx="15" fill="${fill}" stroke="#0b0f13" stroke-width="4"/>` +
-    `<path d="M-15 -14 H15 M-15 6 H15 M-15 26 H15" stroke="#0b0f13" stroke-width="2.4" opacity="0.5"/>`
-  );
+    `<path d="M-15 -14 H15 M-15 6 H15 M-15 26 H15" stroke="#0b0f13" stroke-width="2.4" opacity="0.5"/>`;
+  return svg;
+}
+
+/**
+ * 发光地板（1.0.9）：正方形发光板——深色方形底座 + 内嵌正方形发光面。
+ *   亮 = on 色 + 外围同色半透明光晕；灭 = off 色 + 无光晕。
+ * 电气属性与输出端（灯柱）完全一致（1 个 in 端口，通电即亮 / 断电即灭）。
+ * 与地面开关 floor_switch 无关：不参与玩家踩踏感应。
+ */
+function iconGlowFloor(v) {
+  const on = !!v.state.lit;
+  const c = resolveColor(v.props && v.props.color);
+  const face = on ? c.on : c.off;
+  let svg = '';
+  if (on) {
+    // 光晕：额外一层低透明度同色图形（同上，禁止滤镜）
+    svg += `<rect x="-50" y="-50" width="100" height="100" rx="16" fill="${c.on}" opacity="0.30"/>`;
+  }
+  svg +=
+    `<rect x="-44" y="-44" width="88" height="88" rx="12" fill="#141c24" stroke="#0b0f13" stroke-width="4"/>` +
+    `<rect x="-34" y="-34" width="68" height="68" rx="8" fill="${face}" stroke="#0b0f13" stroke-width="3"/>`;
+  return svg;
 }
 
 /** 普通电门：八角形门框 + 门扇。断电=打开（通行），通电=关闭（拦截）。 */
@@ -248,6 +303,7 @@ export function drawIcon(type, view) {
     case 'power': return iconPower(v);
     case 'solar_panel': return iconSolarPanel(v);
     case 'lamp': return iconLamp(v);
+    case 'glow_floor': return iconGlowFloor(v);
     case 'door': return iconDoor(v);
     case 'wall_switch': return iconWallSwitch(v);
     case 'prox_switch': return iconProxSwitch(v);
@@ -289,7 +345,16 @@ export const ELEMENTS = [
     group: '基础',
     portsText: '1 个输入端口 in',
     principle: '通电即点亮，断电熄灭，用来直观显示「信号是否到达」。',
-    usage: '接在任一开关的输出端，作为状态指示灯。',
+    usage: '接在任一开关的输出端，作为状态指示灯；颜色可选绿 / 粉 / 黄 / 蓝 / 紫 / 白 / 红。',
+  },
+  {
+    id: 'glow_floor',
+    name: '发光地板',
+    en: 'Glowing Floor',
+    group: '基础',
+    portsText: '1 个输入端口 in',
+    principle: '通电即发光、断电熄灭；形状为正方形发光板；发光颜色可选绿 / 粉 / 黄 / 蓝 / 紫 / 白 / 红，与输出端（灯柱）属性一致。',
+    usage: '接在任一开关的输出端，作为地面发光板使用；发光颜色可在属性面板切换。',
   },
   {
     id: 'door',
@@ -373,8 +438,8 @@ export const EL_BY_ID = ELEMENTS.reduce((m, e) => {
 
 /** 元件库顺序（放置面板用）。 */
 export const PALETTE_ORDER = [
-  'power', 'solar_panel', 'lamp', 'door', 'wall_switch', 'prox_switch',
+  'power', 'solar_panel', 'lamp', 'glow_floor', 'door', 'wall_switch', 'prox_switch',
   'button', 'floor_switch', 'auto_switch', 'inverter', 'player',
 ];
 
-export default { ELEMENTS, EL_BY_ID, GEOMETRY, drawIcon, portOffset, RULE_TEXT, DELAY_TEXT, PALETTE_ORDER };
+export default { ELEMENTS, EL_BY_ID, GEOMETRY, drawIcon, portOffset, RULE_TEXT, DELAY_TEXT, PALETTE_ORDER, LIGHT_COLORS };

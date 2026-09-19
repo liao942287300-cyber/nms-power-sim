@@ -14,11 +14,15 @@
  * ---------------------------------------------------------------------------
  */
 
-/** 每种元件拥有的端口（元件的两个侧端口 a/b 是同一个开关的两端，可互换）。 */
+/**
+ * 每种元件拥有的端口（元件的两个侧端口 a/b 是同一个开关的两端，可互换）。
+ * 1.0.9：新增发光地板 glow_floor——与输出端（灯柱）完全相同的电气属性（1 个 in）。
+ */
 export const TYPE_PORTS = {
   power: ['out'],
   solar_panel: ['out'],
   lamp: ['in'],
+  glow_floor: ['in'],
   door: ['in'],
   wall_switch: ['a', 'b'],
   prox_switch: ['a', 'b'],
@@ -38,8 +42,8 @@ export const DAY_LENGTH_SECONDS = 60;
 export const DAY_START_HOUR = 6;
 /** 18:00 日落：白天结束。 */
 export const DAY_END_HOUR = 18;
-/** 终端设备（只读状态，不参与 a/b 导通）。 */
-export const SINK_TYPES = ['lamp', 'door'];
+/** 终端设备（只读状态，不参与 a/b 导通）。1.0.9：发光地板同为负载。 */
+export const SINK_TYPES = ['lamp', 'glow_floor', 'door'];
 /** 手动即时元件：状态由玩家位置 / 点击即时决定。 */
 export const MANUAL_TYPES = ['wall_switch', 'prox_switch', 'button', 'floor_switch'];
 /** 延迟元件：导通状态由控制端经 1 秒延迟决定。 */
@@ -58,6 +62,12 @@ export const DEFAULT_PULSE_SECONDS = 1.0;
 /** 地面开关感应区半宽（px）。 */
 export const FLOOR_HALF = 42;
 
+/**
+ * 发光元件可选颜色 key（1.0.9，顺序即 UI 展示顺序）。
+ * 灯柱 lamp 与发光地板 glow_floor 共用；颜色纯外观，不影响仿真（lit 只由通电决定）。
+ */
+export const LIGHT_COLOR_KEYS = ['green', 'pink', 'yellow', 'blue', 'purple', 'white', 'red'];
+
 /** 固定仿真步长（秒）；主循环按此步长推进。 */
 export const FIXED_DT = 1 / 60;
 /** 单帧最多补算的步数，避免长时间卡顿后一次补太多。 */
@@ -75,6 +85,10 @@ function defaultProps(type) {
       return { radius: DEFAULT_PROX_RADIUS };
     case 'button':
       return { pulseSeconds: DEFAULT_PULSE_SECONDS };
+    // 1.0.9：灯柱 / 发光地板默认黄色（= 保持 1.0.8 观感；旧 JSON 无 color → 自动补默认）
+    case 'lamp':
+    case 'glow_floor':
+      return { color: 'yellow' };
     default:
       return {};
   }
@@ -85,7 +99,7 @@ function defaultState(type) {
   const s = { conducting: false, timer: 0 };
   if (type === 'wall_switch') s.on = false;
   if (type === 'button') s.pulse = 0;
-  if (type === 'lamp') s.lit = false;
+  if (type === 'lamp' || type === 'glow_floor') s.lit = false; // 1.0.9：发光地板同灯柱
   if (type === 'door') s.open = true; // 断电 = 打开（通行）
   if (type === 'solar_panel') s.supplying = false;
   if (type === 'power') s.on = true; // 恒电源默认开启，可人为关断
@@ -331,6 +345,24 @@ export function createEngine() {
     return true;
   }
 
+  /**
+   * 设置发光元件（灯柱 lamp / 发光地板 glow_floor）的颜色（1.0.9）。
+   * 颜色纯属外观：只改 props.color 并自增动态修订号（渲染层据此换图标母本），
+   * 不触碰 state —— lit 只由通电决定，故不改仿真结果。
+   * @param {string} id 元件 id
+   * @param {string} colorKey 颜色 key（须为 LIGHT_COLOR_KEYS 之一）
+   * @returns {boolean} 是否成功（元件不存在 / 类型不符 / key 非法 → false 且无任何副作用）
+   */
+  function setColor(id, colorKey) {
+    const el = elements.get(id);
+    if (!el) return false;
+    if (el.type !== 'lamp' && el.type !== 'glow_floor') return false;
+    if (!LIGHT_COLOR_KEYS.includes(colorKey)) return false;
+    el.props.color = colorKey;
+    bumpDyn(); // 渲染层要立刻换图标（颜色纳入图标缓存键）
+    return true;
+  }
+
   /** 设置墙壁开关状态（on = 接通）。 */
   function setWallSwitch(id, on) {
     const el = elements.get(id);
@@ -535,7 +567,8 @@ export function createEngine() {
 
     // ---------- 步骤 4：更新设备 ----------
     for (const el of elements.values()) {
-      if (el.type === 'lamp') {
+      // 1.0.9：灯柱与发光地板同分支——按 in 端口通电设 lit，翻转时自增动态修订号
+      if (el.type === 'lamp' || el.type === 'glow_floor') {
         const lit = powered.has(nodeKey(el.id, 'in'));
         if (el.state.lit !== lit) { el.state.lit = lit; bumpDyn(); }
       } else if (el.type === 'door') {
@@ -797,6 +830,8 @@ export function createEngine() {
     removeWire,
     moveElement,
     setProp,
+    /** 设置发光元件颜色（1.0.9，纯外观，不改仿真）。 */
+    setColor,
     setWallSwitch,
     toggleWallSwitch,
     triggerButton,
@@ -842,5 +877,5 @@ export function createEngine() {
 
 export default {
   createEngine, TYPE_PORTS, SOURCE_TYPES, FIXED_DT, MAX_STEPS, DELAY_SECONDS, nodeKey,
-  DAY_LENGTH_SECONDS, DAY_START_HOUR, DAY_END_HOUR,
+  DAY_LENGTH_SECONDS, DAY_START_HOUR, DAY_END_HOUR, LIGHT_COLOR_KEYS,
 };

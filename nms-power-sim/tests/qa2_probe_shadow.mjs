@@ -72,13 +72,22 @@ try {
   const keyDown = (k, code, vk) => send('Input.dispatchKeyEvent', { type: 'keyDown', key: k, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
   const keyUp = (k, code, vk) => send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
   async function panBy(dx, dy) {
-    const st = await boardState();
-    const cx = st.rect.left + st.rect.width / 2, cy = st.rect.top + st.rect.height / 2;
-    await keyDown(' ', 'Space', 32); await sleep(80);
-    await mouse('mouseMoved', cx, cy); await mouse('mousePressed', cx, cy, { buttons: 1 });
-    for (let i = 1; i <= 8; i++) { await mouse('mouseMoved', cx + dx * i / 8, cy + dy * i / 8, { buttons: 1 }); await sleep(8); }
-    await mouse('mouseReleased', cx + dx, cy + dy);
-    await keyUp(' ', 'Space', 32); await sleep(200);
+    // 1.0.9：空格不再是平移修饰键——优先空白处左键拖动；密集电路回退中键拖动。
+    const b0 = await boardState();
+    const c0 = { x: b0.rect.left + b0.rect.width / 2, y: b0.rect.top + b0.rect.height / 2 };
+    const bp = await js(`const b=document.getElementById('board');const r=b.getBoundingClientRect();
+      for(let fy=0.12;fy<=0.94;fy+=0.06)for(let fx=0.08;fx<=0.94;fx+=0.06){const x=r.left+r.width*fx,y=r.top+r.height*fy;
+      const el=document.elementFromPoint(x,y);if(el&&!(el.closest&&el.closest('[data-el]'))&&(el===b||b.contains(el)))return {x,y};}return null;`);
+    if (bp) {
+      await mouse('mouseMoved', bp.x, bp.y); await mouse('mousePressed', bp.x, bp.y, { buttons: 1 });
+      for (let i = 1; i <= 8; i++) { await mouse('mouseMoved', bp.x + dx * i / 8, bp.y + dy * i / 8, { buttons: 1 }); await sleep(8); }
+      await mouse('mouseReleased', bp.x + dx, bp.y + dy);
+    } else {
+      await mouse('mouseMoved', c0.x, c0.y, { button: 'middle' }); await mouse('mousePressed', c0.x, c0.y, { buttons: 4, button: 'middle' });
+      for (let i = 1; i <= 8; i++) { await mouse('mouseMoved', c0.x + dx * i / 8, c0.y + dy * i / 8, { buttons: 4, button: 'middle' }); await sleep(8); }
+      await mouse('mouseReleased', c0.x + dx, c0.y + dy, { button: 'middle' });
+    }
+    await sleep(200);
   }
   async function click(x, y) { await mouse('mouseMoved', x, y); await mouse('mousePressed', x, y, { buttons: 1 }); await sleep(25); await mouse('mouseReleased', x, y); await sleep(60); }
 

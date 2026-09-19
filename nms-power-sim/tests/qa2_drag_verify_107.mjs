@@ -69,14 +69,14 @@ async function js(expr) {
 const mouse = (type, x, y, o = {}) => page.send('Input.dispatchMouseEvent', { type, x, y, button: o.button ?? 'left', buttons: o.buttons ?? 0, clickCount: o.clickCount ?? 1, pointerType: 'mouse', modifiers: o.modifiers ?? 0 });
 const keyDown = (k, code, vk) => page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: k, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
 const keyUp = (k, code, vk) => page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
-async function drag(from, to, steps = 12, stepMs = 10) {
-  await mouse('mouseMoved', from.x, from.y, { buttons: 0 });
-  await mouse('mousePressed', from.x, from.y, { buttons: 1 });
+async function drag(from, to, steps = 12, stepMs = 10, modifiers = 0) {
+  await mouse('mouseMoved', from.x, from.y, { buttons: 0, modifiers });
+  await mouse('mousePressed', from.x, from.y, { buttons: 1, modifiers });
   for (let i = 1; i <= steps; i++) {
-    await mouse('mouseMoved', from.x + (to.x - from.x) * i / steps, from.y + (to.y - from.y) * i / steps, { buttons: 1 });
+    await mouse('mouseMoved', from.x + (to.x - from.x) * i / steps, from.y + (to.y - from.y) * i / steps, { buttons: 1, modifiers });
     await sleep(stepMs);
   }
-  await mouse('mouseReleased', to.x, to.y, { buttons: 0 });
+  await mouse('mouseReleased', to.x, to.y, { buttons: 0, modifiers });
   await sleep(150);
 }
 
@@ -98,11 +98,23 @@ const wireCount = () => js(`return document.querySelectorAll('#board path.wire')
 const diffIdx = (a, b) => { const out = []; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) out.push(i); return out; };
 async function panBy(dx, dy) {
   const before = (await boardState()).view;
-  const st = await boardState();
-  const cx = st.rect.left + st.rect.width / 2, cy = st.rect.top + st.rect.height / 2;
-  await keyDown(' ', 'Space', 32); await sleep(80);
-  await drag({ x: cx, y: cy }, { x: cx + dx, y: cy + dy }, 10);
-  await keyUp(' ', 'Space', 32); await sleep(250);
+  // 1.0.9：空格不再是平移修饰键——优先「空白处左键拖动 = 平移」；
+  // 密集电路（376 元件）无可拖动空白时回退「中键拖动 = 平移」（1.0.9 保留该手势）。
+  const bp = await js(`const b=document.getElementById('board');const r=b.getBoundingClientRect();
+    for(let fy=0.12;fy<=0.94;fy+=0.06)for(let fx=0.08;fx<=0.94;fx+=0.06){const x=r.left+r.width*fx,y=r.top+r.height*fy;
+    const el=document.elementFromPoint(x,y);if(el&&!(el.closest&&el.closest('[data-el]'))&&(el===b||b.contains(el)))return {x,y};}
+    return null;`);
+  if (bp) {
+    await drag(bp, { x: bp.x + dx, y: bp.y + dy }, 10);
+  } else {
+    const st = await boardState();
+    const cx = st.rect.left + st.rect.width / 2, cy = st.rect.top + st.rect.height / 2;
+    await mouse('mouseMoved', cx, cy, { buttons: 0, button: 'middle' });
+    await mouse('mousePressed', cx, cy, { buttons: 4, button: 'middle' });
+    for (let i = 1; i <= 10; i++) { await mouse('mouseMoved', cx + dx * i / 10, cy + dy * i / 10, { buttons: 4, button: 'middle' }); await sleep(10); }
+    await mouse('mouseReleased', cx + dx, cy + dy, { buttons: 0, button: 'middle' });
+  }
+  await sleep(220);
   const after = (await boardState()).view;
   return { dx: after.tx - before.tx, dy: after.ty - before.ty };
 }
@@ -220,7 +232,7 @@ async function main() {
   await keyDown('Escape', 'Escape', 27); await keyUp('Escape', 'Escape', 27); await sleep(150);
   st = await boardState();
   const sb4 = await readStats();
-  await drag(w2c(st, 64, 60), w2c(st, 640, 430));
+  await drag(w2c(st, 64, 60), w2c(st, 640, 430), 12, 10, 2); // 1.0.9：框选需 Ctrl(modifiers=2)
   const nSel = await js(`return document.querySelectorAll('#board .sel-box').length;`);
   ok('V4 框选命中 ≥ 40', nSel >= 40, `实际 ${nSel}`);
   const selIds = await js(`return [...document.querySelectorAll('#board .sel-box')].map(g=>{const h=g.closest('[data-el]');return h?h.getAttribute('data-el'):null;}).filter(Boolean);`);

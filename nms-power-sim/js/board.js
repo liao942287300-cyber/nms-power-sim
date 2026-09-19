@@ -26,7 +26,7 @@
  */
 
 import { GEOMETRY, portOffset, drawIcon, EL_BY_ID } from './catalog.js';
-import { DEFAULT_PROX_RADIUS, FLOOR_HALF } from './engine.js';
+import { DEFAULT_PROX_RADIUS, FLOOR_HALF, LIGHT_COLOR_KEYS } from './engine.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const GRID = 24;
@@ -82,13 +82,18 @@ function el(tag, attrs = {}) {
 }
 
 /**
- * 图标缓存键：type + 状态关键位。
- * 只有这些位会影响 drawIcon() 的外观（导通 / 点亮 / 打开 / 供电），据此复用母本。
+ * 图标缓存键：type + 状态关键位（+ 发光元件的颜色）。
+ * 只有这些位会影响 drawIcon() 的外观（导通 / 点亮 / 打开 / 供电 / 颜色），据此复用母本。
+ * 1.0.9：颜色纳入缓存键——否则 lamp / glow_floor 改色后母本命中旧图不刷新。
  */
+const LIGHT_COLOR_SET = new Set(LIGHT_COLOR_KEYS);
 function iconCacheKey(type, view_) {
   const st = (view_ && view_.state) || {};
+  const pr = (view_ && view_.props) || {};
+  const color = LIGHT_COLOR_SET.has(pr.color) ? pr.color : 'yellow'; // 缺省 / 非法回退默认色
   switch (type) {
-    case 'lamp': return `lamp${st.lit ? 1 : 0}`;
+    case 'lamp': return `lamp${st.lit ? 1 : 0}:${color}`;
+    case 'glow_floor': return `glow${st.lit ? 1 : 0}:${color}`;
     case 'door': return `door${st.open ? 1 : 0}`;
     case 'solar_panel': return `solar_panel${st.supplying ? 1 : 0}`;
     case 'power': return `power${st.on === false ? 0 : 1}`; // N1：关断态需刷新图标母本
@@ -459,8 +464,6 @@ export function createBoard(svg, engine, opts = {}) {
 
   /** 视图变换：初始 k=1 / t=0 —— 与旧坐标语义完全兼容。 */
   let view = { k: 1, tx: 0, ty: 0 };
-  let spaceDown = false;    // 空格是否按住（由 app.js 同步）
-  let spacePanUsed = false; // 本轮空格是否被用于平移拖拽
   /** 走线样式 'straight'（直线，默认）| 'curve'（三次贝塞尔曲线）。 */
   let wireStyle = 'straight';
   /** 线条隐藏（1.0.8）：true 时导线与交叉拱整层视觉隐藏，元件保留。O(1) 类切换。 */
@@ -557,10 +560,13 @@ export function createBoard(svg, engine, opts = {}) {
     applyView(); // 缩放只改 viewport 变换，无需重建 / 逐帧刷新
   }
 
+  /**
+   * 平移手势进行中切换 .canvas-wrap.is-panning（抓取光标）。
+   * 1.0.9：移除了空格相关逻辑（原先的 is-pan-ready 与空格平移已删除）。
+   */
   function updateCursorClasses() {
     if (!wrap) return;
     const panning = !!(gesture && gesture.kind === 'pan');
-    wrap.classList.toggle('is-pan-ready', spaceDown && !panning);
     wrap.classList.toggle('is-panning', panning);
   }
 
@@ -1220,14 +1226,46 @@ export function createBoard(svg, engine, opts = {}) {
   }
   svg.addEventListener('contextmenu', onContextMenu);
 
+  /**
+   * Alt + 拖动：把当前被拖元件集合整组复制一份（1.0.9）。
+   *   - type 与 props 全量复制（Object.assign），state 用引擎默认初始态；
+   *   - 收集副本的 offsets，把后续拖动目标（gesture.offs / gesture.id）换成副本，
+   *     锚点对应「原锚点那一份」的副本，保证吸附位置仍是同一元件；
+   *   - multiSel 变为副本集合，松手后副本保持选中，原元件原地不动；
+   *   - 一次拖动只复制一次（由 gesture.copied 守卫，不随 mousemove 反复复制）。
+   * @param {object} g 当前 kind:'element' 手势对象
+   */
+  function duplicateGroupForDrag(g) {
+    onBeforeChange('add'); // 撤销快照：压入「复制前」状态（一次拖动只压一次）
+    const anchorSrc = g.offs.find((o) => o.id === g.id) || g.offs[0];
+    const newOffs = [];
+    let anchorNewId = null;
+    for (const o of g.offs) {
+      const src = engine.getElement(o.id);
+      if (!src) continue;
+      const created = engine.addElement(src.type, {
+        x: src.x, y: src.y, props: Object.assign({}, src.props),
+      });
+      if (!created) continue;
+      newOffs.push({ id: created.id, ox: o.ox, oy: o.oy });
+      if (o === anchorSrc) anchorNewId = created.id;
+    }
+    if (!newOffs.length) return; // 无可复制（理论上不会发生）
+    g.offs = newOffs;
+    g.id = anchorNewId != null ? anchorNewId : newOffs[0].id;
+    g.copied = true;
+    multiSel = new Set(newOffs.map((o) => o.id));
+    onChange('add'); // 外部据此刷新元件库高亮 / 检查器
+  }
+
   function onDown(e) {
     if (e.button !== 0 && e.button !== 1) return;
 
-    // 0) 平移手势：空格按住 或 鼠标中键。期间不得选中 / 放置 / 连线。
-    if (spaceDown || e.button === 1) {
+    // 0) 平移手势：鼠标中键拖动（1.0.9：左键空白处拖动也改为平移，见下方空白分支）。
+    //    期间不得选中 / 放置 / 连线。
+    if (e.button === 1) {
       gesture = {
-        kind: 'pan', lastX: e.clientX, lastY: e.clientY,
-        viaSpace: spaceDown, moved: false,
+        kind: 'pan', button: e.button, lastX: e.clientX, lastY: e.clientY, moved: false,
       };
       updateCursorClasses();
       window.addEventListener('pointermove', onMove, true);
@@ -1283,6 +1321,8 @@ export function createBoard(svg, engine, opts = {}) {
       gesture = {
         kind: 'element', id: elId,
         startX: pt.x, startY: pt.y, moved: false,
+        // 1.0.9：Alt 按下时，首次越过拖动阈值会把整组复制一份并改拖副本（原元件不动）
+        alt: e.altKey,
         offs: dragIds.map((id) => {
           const e2 = engine.getElement(id);
           return { id, ox: e2.x - pt.x, oy: e2.y - pt.y };
@@ -1295,7 +1335,7 @@ export function createBoard(svg, engine, opts = {}) {
       return;
     }
 
-    // 3) 空白处：放置已选中元件（单次放置，放下即解除武装），或开始框选 / 清空选择
+    // 3) 空白处：放置已选中元件（放下即解除武装）→ 框选（Ctrl/⌘）→ 平移画布
     if (armedType) {
       onBeforeChange('add'); // 撤销历史：压入放置前快照
       const id = placeAt(armedType, pt.x, pt.y);
@@ -1309,8 +1349,19 @@ export function createBoard(svg, engine, opts = {}) {
       render();
       return;
     }
-    // 左键空白处按下：进入框选手势（拖动出选框）；松手若无位移则视为单击 → 清空选择
-    gesture = { kind: 'marquee', sx: pt.x, sy: pt.y, moved: false };
+    if (e.ctrlKey || e.metaKey) {
+      // 1.0.9：框选需按住 Ctrl/⌘。左→右全包含 / 右→左相交即选中，逻辑保持不变。
+      // 松手若无位移则视为单击空白 → 清空选择。
+      gesture = { kind: 'marquee', sx: pt.x, sy: pt.y, moved: false };
+      window.addEventListener('pointermove', onMove, true);
+      window.addEventListener('pointerup', onUp, true);
+      e.preventDefault();
+      return;
+    }
+    // 1.0.9（新默认手势）：空白处直接拖动 = 平移画布。松手若无位移（左键单击空白）
+    // 视为「单击空白」→ 清空选择（保留 1.0.8 既有的「点空白取消选择」行为）。
+    gesture = { kind: 'pan', button: e.button, lastX: e.clientX, lastY: e.clientY, moved: false };
+    updateCursorClasses();
     window.addEventListener('pointermove', onMove, true);
     window.addEventListener('pointerup', onUp, true);
     e.preventDefault();
@@ -1325,10 +1376,7 @@ export function createBoard(svg, engine, opts = {}) {
       const dy = e.clientY - gesture.lastY;
       gesture.lastX = e.clientX;
       gesture.lastY = e.clientY;
-      if (Math.abs(dx) + Math.abs(dy) > 0.5) {
-        gesture.moved = true;
-        if (gesture.viaSpace) spacePanUsed = true;
-      }
+      if (Math.abs(dx) + Math.abs(dy) > 0.5) gesture.moved = true;
       view.tx += dx;
       view.ty += dy;
       notifyView();
@@ -1352,6 +1400,12 @@ export function createBoard(svg, engine, opts = {}) {
       if (!gesture.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
         gesture.moved = true;
         gesture.snapshotted = false;
+        // 1.0.9：Alt+拖动首次越过阈值 → 复制整组副本并把后续拖动目标切为副本。
+        // 复制瞬间已压入撤销快照（'add'），故把 snapshotted 置真，避免再压一次 'move'。
+        if (gesture.alt && !gesture.copied) {
+          duplicateGroupForDrag(gesture);
+          gesture.snapshotted = true;
+        }
       }
       if (gesture.moved) {
         // 刚体批量移动（1.0.3 修复组变形）：吸附只对「锚点」（手势抓取的元件）
@@ -1396,8 +1450,17 @@ export function createBoard(svg, engine, opts = {}) {
     window.removeEventListener('pointerup', onUp, true);
 
     if (gesture && gesture.kind === 'pan') {
+      // 1.0.9：平移手势松手——左键且几乎没动 = 单击空白 → 清空选择。
+      // 中键单击不触发清除（仅结束平移）。
+      const clickEmpty = !gesture.moved && gesture.button === 0;
       gesture = null;
       updateCursorClasses();
+      if (clickEmpty) {
+        multiSel.clear();
+        selection = null;
+        render();
+        onChange('selection');
+      }
       return;
     }
 
@@ -1422,9 +1485,10 @@ export function createBoard(svg, engine, opts = {}) {
 
     if (gesture && gesture.kind === 'element') {
       if (!gesture.moved) {
-        // 视为点击：手动元件即时操作（选择逻辑不吞掉电源 / 开关的单击切换）
+        // 视为点击：手动元件即时操作（选择逻辑不吞掉电源 / 开关的单击切换）。
+        // 1.0.9：Alt+单击不触发任何点击动作（Alt 是「拖动复制」修饰键）。
         const elem = engine.getElement(gesture.id);
-        if (elem) {
+        if (elem && !gesture.alt) {
           if (elem.type === 'wall_switch') engine.toggleWallSwitch(elem.id);
           else if (elem.type === 'button') engine.triggerButton(elem.id);
           else if (elem.type === 'power') engine.togglePower(elem.id);
@@ -1676,18 +1740,8 @@ export function createBoard(svg, engine, opts = {}) {
     },
 
     /* --------------------------- 空格平移协作 --------------------------- */
-
-    /** 由 app.js 在 keydown / keyup ' ' 时同步空格按住状态。 */
-    setSpaceDown(v) {
-      spaceDown = !!v;
-      updateCursorClasses();
-    },
-    /** 取出并复位「本轮空格被用于平移」标记（keyup 时据此决定是否切换播放/暂停）。 */
-    consumeSpacePan() {
-      const used = spacePanUsed;
-      spacePanUsed = false;
-      return used;
-    },
+    // 1.0.9：空格相关的平移协作 API（setSpaceDown / consumeSpacePan）已全部移除——
+    // 平移改为「空白处直接拖动」，空格改作「显示 / 隐藏线条」快捷键（见 app.js）。
   };
 }
 

@@ -87,15 +87,16 @@ async function rightClick(x, y) {
   await mouse('mouseReleased', x, y, { buttons: 0, button: 'right' });
   await sleep(200);
 }
-async function drag(from, to, steps = 12, button = 'left') {
+// 1.0.9：新增 modifiers 形参——框选需带 Ctrl（MOD_CTRL），Alt 复制需带 Alt。
+async function drag(from, to, steps = 12, button = 'left', modifiers = 0) {
   const btns = button === 'middle' ? 4 : 1;
-  await mouse('mouseMoved', from.x, from.y, { buttons: 0, button });
-  await mouse('mousePressed', from.x, from.y, { buttons: btns, button });
+  await mouse('mouseMoved', from.x, from.y, { buttons: 0, button, modifiers });
+  await mouse('mousePressed', from.x, from.y, { buttons: btns, button, modifiers });
   for (let i = 1; i <= steps; i++) {
-    await mouse('mouseMoved', from.x + (to.x - from.x) * i / steps, from.y + (to.y - from.y) * i / steps, { buttons: btns, button });
+    await mouse('mouseMoved', from.x + (to.x - from.x) * i / steps, from.y + (to.y - from.y) * i / steps, { buttons: btns, button, modifiers });
     await sleep(10);
   }
-  await mouse('mouseReleased', to.x, to.y, { buttons: 0, button });
+  await mouse('mouseReleased', to.x, to.y, { buttons: 0, button, modifiers });
   await sleep(80);
 }
 async function wheel(x, y, deltaY) {
@@ -292,14 +293,20 @@ function s1Basics() {
   return js(`
     const cards=[...document.querySelectorAll('#catalog-root .el-card')];
     const solar=document.querySelector('#catalog-root .el-card[data-type="solar_panel"]');
+    const glow=document.querySelector('#catalog-root .el-card[data-type="glow_floor"]');
+    const lamp=document.querySelector('#catalog-root .el-card[data-type="lamp"]');
     return {catalog:cards.length, rule:!!document.querySelector('#catalog-root .rule-card'),
       everyHasSvg:cards.every(c=>c.querySelectorAll('.el-card-icon *').length>0),
       solar:!!solar, solarSvg:solar?solar.querySelectorAll('.el-card-icon *').length:0,
+      glow:!!glow, glowSvg:glow?glow.querySelectorAll('.el-card-icon *').length:0,
+      lampIcon:lamp?lamp.querySelector('.el-card-icon').innerHTML:'',
       solarPrinciple:solar?((solar.querySelector('.principle')||{}).textContent||''):''};`).then((d) => {
     ok('S1 图鉴：总规则卡存在', d.rule);
-    eq('S1 图鉴卡片数 = 11', d.catalog, 11);
+    eq('S1 图鉴卡片数 = 12（1.0.9 新增发光地板）', d.catalog, 12);
     ok('S1 每卡 SVG 图标有子节点', d.everyHasSvg);
     ok('S1 存在 solar_panel 图鉴卡且图标有子节点', d.solar && d.solarSvg > 0, `svg=${d.solarSvg}`);
+    ok('S1 存在 glow_floor 图鉴卡且图标有子节点（1.0.9）', d.glow && d.glowSvg > 0, `svg=${d.glowSvg}`);
+    ok('S1 灯柱缩略图默认黄色（props.color 缺省→yellow）', d.lampIcon.includes('#ffd23f') || d.lampIcon.includes('#8a7328'), d.lampIcon.slice(0, 80));
     ok('S1 太阳能板卡片文案含「白天…供电 / 夜晚…停止」', /白天/.test(d.solarPrinciple) && /(夜晚|入夜|停止)/.test(d.solarPrinciple), d.solarPrinciple.slice(0, 50));
   });
 }
@@ -311,9 +318,10 @@ async function s2Coords() {
   let st = await boardState();
   const cx = st.rect.left + st.rect.width * 0.5, cy = st.rect.top + st.rect.height * 0.45;
   for (let i = 0; i < 8; i++) await wheel(cx, cy, 60);
-  await blurFocus(); await spaceDown();
+  await blurFocus();
+  // 1.0.9：平移改为「空白处直接拖动」（空格已不再是平移修饰键）；空画布中心即空白。
   await drag({ x: cx, y: cy }, { x: cx + 73, y: cy - 41 });
-  await spaceUp(); await sleep(150);
+  await sleep(150);
   st = await boardState();
   ok('S2 已构造非 identity 视图（k≠1 且 t≠0）', Math.abs(st.view.k - 1) > 0.15 && (Math.abs(st.view.tx) > 5 || Math.abs(st.view.ty) > 5), `k=${st.view.k.toFixed(3)} tx=${st.view.tx.toFixed(1)} ty=${st.view.ty.toFixed(1)}`);
   // 放置
@@ -401,46 +409,59 @@ async function s3ZoomPan() {
   ok('S3 细网格 background-size = 24*--k', Math.abs(sz[2] - 24 * grid.k) < 0.05, `${sz[2]} vs ${(24 * grid.k).toFixed(3)}`);
   const pos0 = grid.pos.split(',')[0].trim().split(/\s+/).map(parseFloat);
   ok('S3 background-position 用 --tx/--ty', Math.abs(pos0[0] - parseFloat(grid.tx)) < 0.01 && Math.abs(pos0[1] - parseFloat(grid.ty)) < 0.01, `pos=${grid.pos}`);
-  // 空格拖拽：只平移
+  // 1.0.9：空白处直接拖动 = 平移（空格已改作「隐藏/显示线条」）
   await clickSel('#btn-fit'); await sleep(120); await clearCanvas();
-  await clickSel('.palette-item[data-type="lamp"]');
+  await importJSON({
+    elements: [{ id: 'p', type: 'power', x: 120, y: 120 }, { id: 'l', type: 'lamp', x: 600, y: 120 }],
+    wires: [{ id: 'w1', a: { el: 'p', port: 'out' }, b: { el: 'l', port: 'in' } }], timeOfDay: 8, dayCycle: false,
+  }, 's3pan');
   st = await boardState();
-  const before = { tx: st.view.tx, ty: st.view.ty, n: st.els.length };
-  await blurFocus(); await spaceDown();
-  await drag({ x: st.rect.left + 300, y: st.rect.top + 250 }, { x: st.rect.left + 420, y: st.rect.top + 320 });
-  await spaceUp(); await sleep(120);
+  await click(w2c(st, 120, 120).x, w2c(st, 120, 120).y); // 选中一个元件（验证平移不清空选择）
   st = await boardState();
-  ok('S3 空格拖拽平移 tx/ty', Math.abs(st.view.tx - before.tx) > 10 || Math.abs(st.view.ty - before.ty) > 10);
-  eq('S3 空格拖拽期间不放元件', st.els.length, before.n);
-  ok('S3 空格拖拽期间不选中元件', (st.insp || '').includes('未选择'));
-  ok('S3 空格拖拽期间不连线', st.wires.length === 0);
-  await clearCanvas();
-  // 空格三情形
+  const selN = (await selBoxIds()).length;
+  const before = { tx: st.view.tx, ty: st.view.ty };
+  const coords0 = st.els.map((e) => `${e.id}:${e.x},${e.y}`).sort();
+  const blank = await js(`const b=document.getElementById('board');const r=b.getBoundingClientRect();
+    for(let fy=0.2;fy<=0.9;fy+=0.1)for(let fx=0.15;fx<=0.9;fx+=0.1){const x=r.left+r.width*fx,y=r.top+r.height*fy;
+    const el=document.elementFromPoint(x,y);if(el&&!(el.closest&&el.closest('[data-el]'))&&(el===b||b.contains(el)))return {x,y};}return null;`);
+  ok('S3 找到空白平移起始点', !!blank, JSON.stringify(blank));
+  await drag(blank, { x: blank.x + 130, y: blank.y + 70 });
+  st = await boardState();
+  ok('S3 空白拖动 → 平移 tx/ty', Math.abs(st.view.tx - before.tx) > 10 || Math.abs(st.view.ty - before.ty) > 10,
+    `Δ=(${(st.view.tx - before.tx).toFixed(1)},${(st.view.ty - before.ty).toFixed(1)})`);
+  ok('S3 平移期间元件坐标零变化', JSON.stringify(st.els.map((e) => `${e.id}:${e.x},${e.y}`).sort()) === JSON.stringify(coords0),
+    `${JSON.stringify(st.els.map((e) => `${e.id}:${e.x},${e.y}`).sort())} vs ${JSON.stringify(coords0)}`);
+  eq('S3 平移不清空选择集', (await selBoxIds()).length, selN);
+  ok('S3 平移期间无 marquee-box', !(await js(`return !!document.querySelector('#board .marquee-box');`)));
+
+  // 1.0.9：空格 = 隐藏/显示线条（不再切换播放/暂停）
   await blurFocus();
   const paused = () => js(`return document.getElementById('btn-run').classList.contains('is-paused');`);
+  const runTxt0 = await js(`return document.getElementById('btn-run').textContent;`);
   const p0 = await paused();
   await spaceDown(); await spaceUp(); await sleep(150);
   const p1 = await paused();
-  ok('S3 ①单击空格 → 播放/暂停切换', p1 !== p0, `${p0}→${p1}`);
-  if (p1) { await spaceDown(); await spaceUp(); await sleep(150); }
-  const pRun = await paused();
-  await blurFocus(); await spaceDown();
-  st = await boardState();
-  await drag({ x: st.rect.left + 300, y: st.rect.top + 240 }, { x: st.rect.left + 500, y: st.rect.top + 300 });
-  await sleep(60); await spaceUp(); await sleep(150);
-  const p2 = await paused();
-  ok('S3 ②空格拖拽 → 只平移，松开不切换播放/暂停', p2 === pRun, `${pRun}→${p2}`);
-  await blurFocus(); await spaceDown(); await spaceUp(); await sleep(150);
-  const p3 = await paused();
-  ok('S3 ③拖拽后再次单击空格 → 正常切换（标记复位）', p3 !== p2, `${p2}→${p3}`);
-  if (p3) { await spaceDown(); await spaceUp(); await sleep(120); }
-  // blur
-  await blurFocus(); await spaceDown();
-  const ready1 = await js(`return document.getElementById('canvas-wrap').classList.contains('is-pan-ready');`);
+  ok('S3 ①单击空格 → 播放/暂停【不变】', p1 === p0, `${p0}→${p1}`);
+  const hidden1 = await js(`return document.getElementById('board').classList.contains('wires-hidden');`);
+  const aria1 = await js(`return document.getElementById('btn-wires-hidden').getAttribute('aria-pressed');`);
+  ok('S3 ①单击空格 → 线条隐藏 + aria-pressed=true', hidden1 === true && aria1 === 'true', `hidden=${hidden1} aria=${aria1}`);
+  eq('S3 ①空格不改播放按钮文案', await js(`return document.getElementById('btn-run').textContent;`), runTxt0);
+  await spaceDown(); await spaceUp(); await sleep(150);
+  const hidden2 = await js(`return document.getElementById('board').classList.contains('wires-hidden');`);
+  ok('S3 ②再按空格 → 恢复显示线条', hidden2 === false, `hidden=${hidden2}`);
+
+  // 1.0.9：Ctrl 按下给画布加 is-marquee-ready（原 is-pan-ready 已随空格平移删除）
+  const CTRL_EV = (t) => page.send('Input.dispatchKeyEvent', { type: t, key: 'Control', code: 'ControlLeft', windowsVirtualKeyCode: 17, nativeVirtualKeyCode: 17, modifiers: t === 'keyDown' ? MOD_CTRL : 0 });
+  await CTRL_EV('keyDown');
+  const ready1 = await js(`return document.getElementById('canvas-wrap').classList.contains('is-marquee-ready');`);
+  await CTRL_EV('keyUp'); await sleep(120);
+  const readyUp = await js(`return document.getElementById('canvas-wrap').classList.contains('is-marquee-ready');`);
+  ok('S3 Ctrl 按下 → is-marquee-ready 出现，松开移除', ready1 === true && readyUp === false, `down=${ready1} up=${readyUp}`);
+  await CTRL_EV('keyDown');
   await js(`window.dispatchEvent(new Event('blur'));return 1;`); await sleep(120);
-  const after = await js(`return document.getElementById('canvas-wrap').classList.contains('is-pan-ready');`);
-  await spaceUp();
-  ok('S3 blur 后不卡在平移态', ready1 === true && after === false, `ready1=${ready1} after=${after}`);
+  const after = await js(`return document.getElementById('canvas-wrap').classList.contains('is-marquee-ready');`);
+  await CTRL_EV('keyUp');
+  ok('S3 blur 后不残留框选准备态', after === false, `after=${after}`);
   // 中键
   await focusBoard(); await clearCanvas(); await clickSel('#btn-fit'); await sleep(120);
   st = await boardState(); const bm = { tx: st.view.tx, ty: st.view.ty };
@@ -606,8 +627,10 @@ async function s6Solar() {
   console.log('\n--- S6 太阳能板端到端 ---');
   await ensureRunning(); await setView('lab'); await clearCanvas();
   const pal = await js(`return [...document.querySelectorAll('#palette .palette-item')].map(b=>b.dataset.type);`);
-  eq('S6 元件库 11 项且含 solar_panel', pal.length, 11);
+  eq('S6 元件库 12 项且含 solar_panel（1.0.9 新增发光地板）', pal.length, 12);
   ok('S6 元件库含 solar_panel', pal.includes('solar_panel'));
+  ok('S6 元件库含 glow_floor 且紧随 lamp 之后（PALETTE_ORDER）', pal.includes('glow_floor') && pal.indexOf('glow_floor') === pal.indexOf('lamp') + 1,
+    `order=${pal.join(',')}`);
   await loadPresetIdx(6);
   let st = await boardState();
   const lampId = (st.els.find((e) => e.cls.includes('lamp')) || {}).id;
@@ -696,7 +719,7 @@ async function s8Refresh() {
   const before = exceptions.length;
   await page.send('Page.reload', { ignoreCache: true }); await sleep(2500);
   const a = await js(`return {cards:document.querySelectorAll('#catalog-root .el-card').length,nav:document.querySelectorAll('.nav-btn').length,presets:document.querySelectorAll('#preset-root .preset-card').length,imgs:document.querySelectorAll('#preset-root .preset-media img').length};`);
-  eq('S8 刷新后图鉴 11 卡', a.cards, 11);
+  eq('S8 刷新后图鉴 12 卡（1.0.9 新增发光地板）', a.cards, 12);
   eq('S8 刷新后导航 3 键', a.nav, 3);
   eq('S8 刷新后实例 7 张', a.presets, 7);
   eq('S8 刷新后参考图 7 张', a.imgs, 7);
@@ -795,7 +818,8 @@ async function s11Marquee() {
 
   // A. 左→右框选（完全包含）：世界矩形 (10,10)-(720,240) 应选中 p/w1/l 三个
   //    （起点取 (10,10)：画布 (0,0) 恰在 svg 边缘，pointerdown 会命中外层 wrap）
-  await drag(w2c(st, 10, 10), w2c(st, 720, 240));
+  //    1.0.9：框选需按住 Ctrl（MOD_CTRL），否则空白拖动 = 平移。
+  await drag(w2c(st, 10, 10), w2c(st, 720, 240), 12, 'left', MOD_CTRL);
   st = await boardState();
   eq('S11 框选（左→右）：3 个完全落入框内的元件进入选择集', await selBoxCount(), 3);
   const ids = await selBoxIds();
@@ -838,7 +862,7 @@ async function s11Marquee() {
 
   // E. 点击已选中的元件：不清空选择集（为拖组做准备）
   await pressEscape();
-  await drag(w2c(st, 10, 10), w2c(st, 720, 240)); // 重新框选 3 个（都在框内：x≤668, y≤201）
+  await drag(w2c(st, 10, 10), w2c(st, 720, 240), 12, 'left', MOD_CTRL); // 重新框选 3 个（1.0.9：需 Ctrl）
   st = await boardState();
   eq('S11 重新框选 3 个', await selBoxCount(), 3);
   await click(w2c(st, 408, 168).x, w2c(st, 408, 168).y); // 点击已选中的 w1（移动后 360+48,120+48）
@@ -858,7 +882,7 @@ async function s11Marquee() {
   await importJSON({ elements: [{ id: 'l1', type: 'lamp', x: 120, y: 120 }, { id: 'l2', type: 'lamp', x: 360, y: 120 }], wires: [], timeOfDay: 8, dayCycle: false }, 's11rtl');
   st = await boardState();
   // 框世界 (200,60)-(400,200)：只与 l2（340..380, 87..153）相交；从 (400,200) 拖到 (200,60)
-  await drag(w2c(st, 400, 200), w2c(st, 200, 60));
+  await drag(w2c(st, 400, 200), w2c(st, 200, 60), 12, 'left', MOD_CTRL);
   st = await boardState();
   eq('S11 右→左框选（相交即选中）：命中 1 个', await selBoxCount(), 1);
   ok('S11 相交框选命中的是 l2（非完全包含但相交）', (await selBoxIds()).includes('l2'), JSON.stringify(await selBoxIds()));
@@ -1016,7 +1040,8 @@ async function s13Rigid() {
   const relBefore = {}; for (const [a, b] of S13_PAIRS) relBefore[`${a}-${b}`] = rel(st, a, b);
 
   // 框选三个（世界 (10,10)-(700,240) 完全覆盖），拖 w1（非网格元件）+47,+23
-  await drag(w2c(st, 10, 10), w2c(st, 700, 240));
+  // 1.0.9：框选需按住 Ctrl。
+  await drag(w2c(st, 10, 10), w2c(st, 700, 240), 12, 'left', MOD_CTRL);
   eq('S13a 框选 3 个（含非网格对齐元件）', await selBoxCount(), 3);
   st = await boardState();
   await drag(w2c(st, 372, 132), w2c(st, 419, 155)); // 抓取非网格元件 w1

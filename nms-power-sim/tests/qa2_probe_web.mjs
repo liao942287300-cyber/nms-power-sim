@@ -87,11 +87,21 @@ try {
   }
   async function wheel(x, y, dy) { await page.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY: dy, button: 'none', pointerType: 'mouse' }); await sleep(10); }
   async function panBy(dx, dy) {
-    const st = await boardState();
-    const cx = st.rect.left + st.rect.width / 2, cy = st.rect.top + st.rect.height / 2;
-    await keyDown(' ', 'Space', 32); await sleep(80);
-    await drag({ x: cx, y: cy }, { x: cx + dx, y: cy + dy });
-    await keyUp(' ', 'Space', 32); await sleep(200);
+    // 1.0.9：空格不再是平移修饰键——优先空白处左键拖动；密集电路回退中键拖动。
+    const b0 = await boardState();
+    const c0 = { x: b0.rect.left + b0.rect.width / 2, y: b0.rect.top + b0.rect.height / 2 };
+    const bp = await js(`const b=document.getElementById('board');const r=b.getBoundingClientRect();
+      for(let fy=0.12;fy<=0.94;fy+=0.06)for(let fx=0.08;fx<=0.94;fx+=0.06){const x=r.left+r.width*fx,y=r.top+r.height*fy;
+      const el=document.elementFromPoint(x,y);if(el&&!(el.closest&&el.closest('[data-el]'))&&(el===b||b.contains(el)))return {x,y};}return null;`);
+    if (bp) {
+      await drag(bp, { x: bp.x + dx, y: bp.y + dy });
+    } else {
+      await mouse('mouseMoved', c0.x, c0.y, { buttons: 0, button: 'middle' });
+      await mouse('mousePressed', c0.x, c0.y, { buttons: 4, button: 'middle' });
+      for (let i = 1; i <= 10; i++) { await mouse('mouseMoved', c0.x + dx * i / 10, c0.y + dy * i / 10, { buttons: 4, button: 'middle' }); await sleep(10); }
+      await mouse('mouseReleased', c0.x + dx, c0.y + dy, { buttons: 0, button: 'middle' });
+    }
+    await sleep(220);
   }
 
   const READ_BOARD = `
@@ -195,18 +205,30 @@ try {
   st = await boardState();
   const cx = st.rect.left + st.rect.width / 2, cy = st.rect.top + st.rect.height / 2;
   const selStart = Date.now();
+  // 1.0.9 语义修正：只有“点中元件”才生成 .sel-box（空白左键单击 = 清空选择，不再选中）。
+  // 旧实现随机撒点 10 次 + 监听整棵 #board 的 MutationObserver——在 1.0.9 下命中率过低
+  // （实测 n=1），且 observer 未 disconnect、会把无关子节点变更也算作“命中”，无法构成有效测量。
+  // 改为“确定性命中屏内可见元件”并只查询该元件自身 .sel-box（refreshSelection 只按需增删该子节点），
+  // 阈值维持不变（n≥8 / avg<100ms / max<250ms），选择性能若退化仍会判失败。
   const latencies = [];
-  for (let i = 0; i < 10; i++) {
-    const p = { x: cx + (Math.random() - 0.5) * st.rect.width * 0.7, y: cy + (Math.random() - 0.5) * st.rect.height * 0.7 };
+  const visEls = st.els.filter((el) => {
+    const c = w2c(st, el.x, el.y);
+    return c.x > st.rect.left + 4 && c.x < st.rect.left + st.rect.width - 4
+      && c.y > st.rect.top + 4 && c.y < st.rect.top + st.rect.height - 4;
+  });
+  const picks = [];
+  for (let i = 0; i < visEls.length && picks.length < 10; i += Math.max(1, Math.floor(visEls.length / 10))) picks.push(visEls[i]);
+  for (const el of picks) {
+    const c = w2c(st, el.x, el.y);
+    const probe = `const g=[...document.querySelectorAll('#board .element')].find(n=>n.getAttribute('data-el')==='${el.id}');return !!(g&&g.querySelector('.sel-box'));`;
     const t0 = Date.now();
-    await js(`window.__selSeen=false;(new MutationObserver(()=>{if(document.querySelector('#board .sel-box')){window.__selSeen=true;}})).observe(document.getElementById('board'),{subtree:true,childList:true});return 1;`);
-    await mouse('mouseMoved', p.x, p.y);
-    await mouse('mousePressed', p.x, p.y, { buttons: 1 });
+    await mouse('mouseMoved', c.x, c.y);
+    await mouse('mousePressed', c.x, c.y, { buttons: 1 });
     let seen = false;
-    for (let k = 0; k < 40 && !seen; k++) { await sleep(5); seen = await js(`return window.__selSeen===true;`); }
-    await mouse('mouseReleased', p.x, p.y);
+    for (let k = 0; k < 40 && !seen; k++) { seen = await js(probe); if (!seen) await sleep(3); }
+    await mouse('mouseReleased', c.x, c.y);
     if (seen) latencies.push(Date.now() - t0);
-    await sleep(80);
+    await sleep(40);
   }
   for (let i = 0; i < 4; i++) { const a = { x: cx + (Math.random() - 0.5) * 300, y: cy + (Math.random() - 0.5) * 200 }; await drag(a, { x: a.x + 250, y: a.y + 160 }); }
   for (let i = 0; i < 15; i++) await wheel(cx, cy, -120);
