@@ -167,63 +167,74 @@ export const PRESETS = [
   },
 
   /* ------------------------------------------------------------------ 4 */
+  /* 1.0.12 重做：按教程参考图重建拓扑（3 自动开关 + 3 能量逆变器 + 无状态灯），
+   * 并修正门的方向——密码正确时门「打开（通行）」，而非原来的通电关闭。
+   * 元件：电源×1、墙壁开关×4、自动开关×3（aA/aB/aC 三级与链）、
+   *       能量逆变器×3（inv2 / inv4 取反密码位②④，invD 末级反相驱动门）、普通电门×1。
+   * 布局：底部一排 4 个墙壁开关为输入；中部取反逆变器；上方三级自动开关串成与链；
+   *       末级逆变器 invD 在链尾上方，输出接右侧普通电门。 */
   {
     id: 'password_door',
     title: '简单密码门的应用',
     tag: '4×墙壁开关 逻辑与链',
     image: 'assets/82ab300f4bfbfbed48a18d266ff0f736aec31ff0.jpg',
     summary:
-      '用四个墙壁开关组成「开-关-开-关」的密码，通过自动开关串成逻辑与（AND）链，只有密码完全正确时电门才通电关闭，其余 15 种组合门都保持打开。',
+      '四个墙壁开关组成「开-关-开-关」的密码，三级自动开关串成逻辑与（AND）链——其中第②④位经能量逆变器取反后才算对。末级逆变器把「密码正确」反相为「门断电」，于是只有密码完全正确时电门才打开放行；其余 15 种组合门都保持通电关闭（锁住）。',
     howto: [
-      '电源 → 自动开关①，其后依次串联自动开关②③④，末级输出接普通电门与一盏状态灯。',
-      '自动开关①的控制端直接接墙壁开关①。',
-      '自动开关②的控制端经「能量逆变器②」接墙壁开关②（取反，即「关」才算对）。',
-      '自动开关③的控制端直接接墙壁开关③；自动开关④的控制端经逆变器④接墙壁开关④（取反）。',
-      '正确密码：①开、②关、③开、④关。',
+      '电源分两路：一路（电源母线）同时给 4 个墙壁开关、取反逆变器 inv2/inv4 和末级逆变器 invD 的电源输入端 a 供电；另一路经墙壁开关①串进逻辑与链。',
+      '逻辑与链：w1.b → 自动开关 A.a → 自动开关 B.a → 自动开关 C.a → 末级逆变器 invD 的控制端 ctrl，四级串联，任一级不导通整条链就断。',
+      'A 的控制端取自「逆变器 inv2」的输出（墙开②拨到「关」时 inv2 才导通，即取反）；B 的控制端直接取自墙开③（「开」才导通）；C 的控制端取自「逆变器 inv4」的输出（墙开④拨到「关」时 inv4 才导通）。',
+      '末级逆变器 invD：电源接它的 a，链末级输出接它的 ctrl，它的输出 b 接普通电门。密码正确 → 链导通 → invD 收到控制信号 → 1 秒后切断 → 门断电 → 打开。',
+      '正确密码：①开、②关、③开、④关。拨错任一位，链断 → invD 恢复导通 → 门重新通电关闭（锁住）。',
     ],
-    keyPoint: '任一开关状态不符，对应那一级自动开关就不导通，串联链断开，电门断电保持打开。',
+    keyPoint: '普通电门是反逻辑：通电 = 关闭（拦截），断电 = 打开（通行）。所以链末级必须再加一级逆变器，把「密码正确（链导通）」反相成「门断电」——这正是参考图上第 3 个逆变器的用途。',
     parts: [
       { name: '电源', qty: 1 },
       { name: '墙壁开关', qty: 4 },
-      { name: '自动开关', qty: 4 },
-      { name: '能量逆变器', qty: 2 },
+      { name: '自动开关', qty: 3 },
+      { name: '能量逆变器', qty: 3 },
       { name: '普通电门', qty: 1 },
-      { name: '输出端（灯柱）', qty: 1 },
     ],
     nodes: [
-      { key: 'power', type: 'power', x: 70, y: 300 },
-      { key: 'a1', type: 'auto_switch', x: 210, y: 170 },
-      { key: 'a2', type: 'auto_switch', x: 400, y: 170 },
-      { key: 'a3', type: 'auto_switch', x: 590, y: 170 },
-      { key: 'a4', type: 'auto_switch', x: 780, y: 170 },
-      { key: 'inv2', type: 'inverter', x: 400, y: 320 },
-      { key: 'inv4', type: 'inverter', x: 780, y: 320 },
-      { key: 'w1', type: 'wall_switch', x: 210, y: 480, init: { on: true } },
-      { key: 'w2', type: 'wall_switch', x: 400, y: 480, init: { on: false } },
-      { key: 'w3', type: 'wall_switch', x: 590, y: 480, init: { on: true } },
-      { key: 'w4', type: 'wall_switch', x: 780, y: 480, init: { on: false } },
-      { key: 'door', type: 'door', x: 960, y: 300 },
-      { key: 'lamp', type: 'lamp', x: 880, y: 110 },
+      // 底部：电源 + 4 个墙壁开关（玩家输入，初始即「开-关-开-关」）
+      { key: 'power', type: 'power', x: 80, y: 490 },
+      { key: 'w1', type: 'wall_switch', x: 200, y: 490, init: { on: true } },
+      { key: 'w2', type: 'wall_switch', x: 340, y: 490, init: { on: false } },
+      { key: 'w3', type: 'wall_switch', x: 510, y: 490, init: { on: true } },
+      { key: 'w4', type: 'wall_switch', x: 680, y: 490, init: { on: false } },
+      // 中部：两个取反逆变器（分别在墙开②/④所在列，输出向上喂对应自动开关的 ctrl）
+      { key: 'inv2', type: 'inverter', x: 340, y: 350 },
+      { key: 'inv4', type: 'inverter', x: 680, y: 350 },
+      // 上方：三级自动开关串成与链（信号从左往右），链尾接末级逆变器
+      { key: 'aA', type: 'auto_switch', x: 340, y: 190 },
+      { key: 'aB', type: 'auto_switch', x: 510, y: 190 },
+      { key: 'aC', type: 'auto_switch', x: 680, y: 190 },
+      // 链尾：末级反相逆变器 + 普通电门（负载在末端）
+      { key: 'invD', type: 'inverter', x: 860, y: 190 },
+      { key: 'door', type: 'door', x: 990, y: 250 },
     ],
     links: [
-      ['power', 'out', 'a1', 'a'],
-      ['a1', 'b', 'a2', 'a'],
-      ['a2', 'b', 'a3', 'a'],
-      ['a3', 'b', 'a4', 'a'],
-      ['a4', 'b', 'door', 'in'],
-      ['a4', 'b', 'lamp', 'in'],
+      // —— 电源母线（7 根）：4 个墙壁开关 + 2 个取反逆变器 + 末级逆变器 ——
       ['power', 'out', 'w1', 'a'],
-      ['w1', 'b', 'a1', 'ctrl'],
-      ['power', 'out', 'inv2', 'a'],
       ['power', 'out', 'w2', 'a'],
-      ['w2', 'b', 'inv2', 'ctrl'],
-      ['inv2', 'b', 'a2', 'ctrl'],
       ['power', 'out', 'w3', 'a'],
-      ['w3', 'b', 'a3', 'ctrl'],
-      ['power', 'out', 'inv4', 'a'],
       ['power', 'out', 'w4', 'a'],
+      ['power', 'out', 'inv2', 'a'],
+      ['power', 'out', 'inv4', 'a'],
+      ['power', 'out', 'invD', 'a'],
+      // —— 逻辑与链（4 根）：w1 → aA → aB → aC → invD.ctrl ——
+      ['w1', 'b', 'aA', 'a'],
+      ['aA', 'b', 'aB', 'a'],
+      ['aB', 'b', 'aC', 'a'],
+      ['aC', 'b', 'invD', 'ctrl'],
+      // —— 门（1 根）——
+      ['invD', 'b', 'door', 'in'],
+      // —— 三级控制端（5 根）：②经 inv2 取反 / ③直连 / ④经 inv4 取反 ——
+      ['w2', 'b', 'inv2', 'ctrl'],
+      ['inv2', 'b', 'aA', 'ctrl'],
+      ['w3', 'b', 'aB', 'ctrl'],
       ['w4', 'b', 'inv4', 'ctrl'],
-      ['inv4', 'b', 'a4', 'ctrl'],
+      ['inv4', 'b', 'aC', 'ctrl'],
     ],
   },
 

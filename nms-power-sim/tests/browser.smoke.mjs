@@ -688,7 +688,8 @@ async function s7Presets() {
     if (PRESET_NAMES[i] === 'waterfall_inverter') ok('S7 流水灯出现三灯同亮/追逐（含 111）', seen.has('111'), `集合={${[...seen].join(',')}}`);
     if (PRESET_NAMES[i] === 'password_door') {
       const last = await boardState();
-      ok('S7 密码门：门关闭且状态灯点亮', statusOf(last, (last.els.find((e) => e.cls.includes('element-door')) || {}).id) === '关闭（拦截）' && statusOf(last, lamps[0]) === '点亮');
+      // 1.0.12：密码门改为「密码正确 → 门断电 → 打开（通行）」，且不再有状态灯
+      ok('S7 密码门：门打开（通行）', statusOf(last, (last.els.find((e) => e.cls.includes('element-door')) || {}).id) === '打开（通行）');
     }
     if (PRESET_NAMES[i] === 'strobe') {
       const sw = await boardState();

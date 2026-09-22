@@ -407,6 +407,8 @@ function section6() {
  * 7. 密码门：16 种组合全测
  * ========================================================================= */
 function section7() {
+  // 1.0.12：拓扑按参考图重做（3 自动开关 + 3 逆变器 + 无状态灯），门的方向改为
+  // 「密码正确 → 门断电 → 打开（通行）」，故 1010 是唯一门开的组合，其余 15 种门关闭。
   const p = PRESET_BY_ID.password_door;
   const EXPECT = { w1: true, w2: false, w3: true, w4: false };
   const rows = [];
@@ -422,18 +424,17 @@ function section7() {
     }
     ticks(e, 8, FIXED_DT); // 4 级 × 1s，8s 充足
     const doorOpen = e.getElementView('password_door_door').open;
-    const lampLit = lit(e, 'password_door_lamp');
     const isCorrect = combo.w1 === EXPECT.w1 && combo.w2 === EXPECT.w2
       && combo.w3 === EXPECT.w3 && combo.w4 === EXPECT.w4;
-    const expectDoorOpen = !isCorrect; // 正确 → 通电 → 门关(open=false)
+    const expectDoorOpen = isCorrect; // 正确 → 链导通 → 末级逆变器切断 → 门断电 → 打开
     rows.push(`${combo.w1 ? 1 : 0}${combo.w2 ? 1 : 0}${combo.w3 ? 1 : 0}${combo.w4 ? 1 : 0}`
-      + ` | door.open=${doorOpen ? '开' : '关'} lamp=${lampLit ? '亮' : '灭'}`
-      + ` | 期望门${expectDoorOpen ? '开' : '关'} lamp${isCorrect ? '亮' : '灭'}`
-      + `${(doorOpen === expectDoorOpen && lampLit === isCorrect) ? '' : '  <<< 不符'}`);
-    if (doorOpen !== expectDoorOpen || lampLit !== isCorrect) wrong++;
+      + ` | door.open=${doorOpen ? '开' : '关'}`
+      + ` | 期望门${expectDoorOpen ? '开' : '关'}`
+      + `${(doorOpen === expectDoorOpen) ? '' : '  <<< 不符'}`);
+    if (doorOpen !== expectDoorOpen) wrong++;
   }
   note('[7 密码门] 16 组合真值表（w1w2w3w4 顺序，正确=1010 即 开-关-开-关）：\n    ' + rows.join('\n    '));
-  check('7 密码门：16 组合全部符合（仅 1010 门关+灯亮）', wrong === 0, `不符 ${wrong} 组`);
+  check('7 密码门：16 组合全部符合（仅 1010 门打开，其余 15 种门关闭）', wrong === 0, `不符 ${wrong} 组`);
 }
 
 /* =========================================================================

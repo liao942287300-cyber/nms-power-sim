@@ -57,7 +57,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 const APP_NAME = '无人深空 · 电力模拟器';
-const APP_VERSION = '1.0.11';
+const APP_VERSION = '1.0.12';
 
 const isDev = !app.isPackaged;
 const userDataPath = app.getPath('userData');
