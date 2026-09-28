@@ -343,6 +343,18 @@ h1, h2, h3, h4 { margin: 0 0 6px; font-weight: 650; letter-spacing: 0.2px; }
 .board.wires-hidden .layer-wires,
 .board.wires-hidden .layer-jumps { display: none; }
 
+/* 电源线条隐藏开关（svg 根 .hide-power-wires 类，board.setPowerWiresHidden O(1) 切换，
+   1.1.0）：按线粒度隐藏「电源母线」上的导线——彩色线 + halo 底衬 + 交叉拱
+   （casing + arc）。类名 is-power-net 由 board 在结构重建 / 线缆集合变化时按
+   engine.isWireOnPowerBus 写入：从电源出发、沿途不穿过任何开关 a-b 内部即可达的线。
+   跨过开关 a-b 的受控线（如 开关A.b → 开关B.a、开关B.b → 灯）与控制段永不带此类，
+   故始终可见。与 .wires-hidden 叠加时整层隐藏优先（.wires-hidden 隐藏整个
+   .layer-wires / .layer-jumps，覆盖本规则）。 */
+.board.hide-power-wires .wire.is-power-net,
+.board.hide-power-wires .wire-halo.is-power-net,
+.board.hide-power-wires .jump-casing.is-power-net,
+.board.hide-power-wires .jump-arc.is-power-net { display: none; }
+
 /* 低缩放装饰削减（svg 根 .is-far-zoom 类，board.refreshDynamic 按 DECOR_HIDE_K=0.55
    O(1) 切换）：缩放比很低时下列装饰在视觉上难以分辨（7px 拱在 k=0.3 时不足 3px、
    端口点不足 2px、标签不可读），整层隐藏可显著削减绘制量：

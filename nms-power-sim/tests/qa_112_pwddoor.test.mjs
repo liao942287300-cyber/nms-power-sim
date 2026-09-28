@@ -626,11 +626,65 @@ section('8. 桌面壳 renderer 与源码一致性（MD5）');
   const pkg = resolve(ROOT, '..', 'nms-power-sim-desktop', 'package.json');
   if (existsSync(pkg)) {
     const v = JSON.parse(readFileSync(pkg, 'utf8')).version;
-    check('8.9 桌面壳版本号 == 1.0.12', v === '1.0.12', `实测 ${v}`);
+    // 1.0.13 起：不再写死版本号（每升一版都会误报），改为「格式合法 + main.js 与 package.json 一致」
+    const mainJs = resolve(ROOT, '..', 'nms-power-sim-desktop', 'main.js');
+    const appVer = existsSync(mainJs)
+      ? (readFileSync(mainJs, 'utf8').match(/APP_VERSION\s*=\s*'([^']+)'/) || [])[1]
+      : null;
+    check('8.9 桌面壳版本号格式合法（x.y.z）', /^\d+\.\d+\.\d+$/.test(v), `实测 ${v}`);
+    check('8.10 main.js APP_VERSION 与 package.json 一致', appVer === v, `main.js=${appVer} package.json=${v}`);
     note(`  nms-power-sim-desktop/package.json version = ${v}`);
   } else {
     note('  桌面壳 package.json 不存在 —— 未核对版本号');
   }
+}
+
+/* =========================================================================
+ * 9. 上电瞬态成因与「可否消除」的概念验证（只验证不改源码）
+ * ========================================================================= */
+section('9. 上电瞬态：成因与消除方案的概念验证');
+{
+  /** 支持 init.conducting 的载入器（仅本测试内使用，源码 loadPreset 未改）。 */
+  function loadWithInit(engine, preset) {
+    engine.reset();
+    const idMap = {};
+    for (const n of preset.nodes) {
+      const id = `${preset.id}_${n.key}`;
+      idMap[n.key] = id;
+      engine.addElement(n.type, { id, x: n.x, y: n.y, props: n.props || {} });
+      if (n.type === 'wall_switch' && n.init && n.init.on) engine.setWallSwitch(id, true);
+      if (n.init && typeof n.init.conducting === 'boolean') {
+        const el = engine.getElement(id);
+        if (el) el.state.conducting = n.init.conducting;
+      }
+    }
+    for (const [ka, pa, kb, pb] of preset.links) {
+      if (!idMap[ka] || !idMap[kb]) continue;
+      engine.addWire(idMap[ka], pa, idMap[kb], pb);
+    }
+    return true;
+  }
+  // 把链上 5 个延迟元件（inv2/inv4/aA/aB/aC）预置为其稳态 conducting=true
+  const precharged = clonePreset(PRESET);
+  for (const k of ['inv2', 'inv4', 'aA', 'aB', 'aC']) {
+    const n = precharged.nodes.find((x) => x.key === k);
+    n.init = Object.assign({}, n.init, { conducting: true });
+  }
+  const e = createEngine();
+  loadWithInit(e, precharged);
+  const curve = [];
+  for (let s = 0; s <= 8; s++) {
+    if (s > 0) runFor(e, 1);
+    curve.push(`${s}s=${OPEN(snap(e).doorOpen)}`);
+  }
+  const anyShut = curve.slice(1).some((c) => c.includes('关闭'));
+  note(`9 预充电方案门态曲线: ${curve.join(' ')}`);
+  check('9.1 概念验证：给 5 个延迟元件预置稳态 conducting 后，门 0–8s 全程打开（瞬态可消除）',
+    !anyShut, curve.join(' '));
+  // 预充电不得破坏逻辑：16 组合结论不变
+  const rs = truthTable(precharged, 8).filter((r) => !r.ok);
+  note(`9.2 说明：上面的 truthTable 用的是源码 loadPreset（不认 init.conducting），故仍为 16/16 正确；` +
+    `预充电只影响上电前 3 秒，不影响真值表。不符组数 = ${rs.length}`);
 }
 
 /* =========================================================================

@@ -156,6 +156,18 @@ export function createEngine() {
    */
   let wiresHidden = false;
   /**
+   * 电源线条隐藏偏好（1.1.0，视图偏好，随序列化保存）：true 时渲染层按「线粒度」
+   * 隐藏「原始电源直接送出的供电段」导线。判据为纯拓扑、不随 tick / 昼夜 / 开关
+   * 通断变化。纯视图态——不触碰结构 / 动态修订号（切换是 O(1) 类切换）。
+   */
+  let powerWiresHidden = false;
+  /**
+   * 「电源母线」导线集合缓存（1.1.2）：判据见 computePowerBusWireIds。仅在结构
+   * 修订号变化时重算，不随 tick / 开关通断变化。
+   */
+  let powerBusRev = -1;
+  let powerBusWireIds = new Set();
+  /**
    * 结构修订号（1.0.5 性能修复）：任何会改变「元件集合 / 导线集合 / 元件位置 /
    * 走线样式」的操作都自增一次。渲染层用它做 O(1) 的结构变更检测，替代旧版
    * 每帧拼接大字符串的 computeStructureSig。只增不减，跨 reset 单调。
@@ -640,6 +652,78 @@ export function createEngine() {
     return [...wires.values()];
   }
 
+  /**
+   * 计算「电源母线」导线集合（1.1.2）。
+   *
+   * 判据（用户需求）：一条线的电力只要「从电源出来、中间没被任何开关控制」，
+   * 就属于电源母线，可以隐藏。
+   *
+   * 落地方式：并查集，节点 = `elId:port`，边 = **只取导线两端**——刻意**不**合并
+   * 开关元件内部的 a-b 端口对。a-b 正是「被开关控制」的分界线：跨过它才叫受控，
+   * 不跨过就仍是母线。于是含电源 out 端口的分量即「电源母线」，凡任一端点落在
+   * 该分量中的导线都属于母线。
+   *
+   * 于是下列都算母线（可隐藏）：
+   *   `电源 → 开关A.a`、`开关A.a ↔ 开关B.a`（母线在输入端之间串联延伸）、
+   *   `电源 → 开关A.b`（电源直接接到开关任一侧端口）。
+   * 下列不算（保留）：
+   *   `开关A.b → 开关B.a`、`开关B.b → 灯`（跨过了 a-b，是受控侧）。
+   *
+   * 控制段（任一端 port 为 ctrl）永远保留。纯结构判据，不随开关通断 / 昼夜 / tick 变化。
+   * @returns {Set<string>} 可隐藏的电源母线导线 id 集合
+   */
+  function computePowerBusWireIds() {
+    const parent = new Map();
+    const keys = [];
+    for (const el of elements.values()) {
+      const ports = TYPE_PORTS[el.type] || [];
+      for (const p of ports) keys.push(nodeKey(el.id, p));
+    }
+    const uf = makeUnionFind(keys, parent);
+    // 唯一的边：导线两端。**不** union 开关内部 a-b —— 那是受控侧的分界
+    for (const w of wires.values()) {
+      uf.union(nodeKey(w.a.el, w.a.port), nodeKey(w.b.el, w.b.port));
+    }
+    // 电源 out 端口所在分量 = 电源母线
+    const sourceRoots = new Set();
+    for (const el of elements.values()) {
+      if (!SOURCE_TYPES.includes(el.type)) continue;
+      sourceRoots.add(uf.find(nodeKey(el.id, 'out')));
+    }
+    const out = new Set();
+    if (!sourceRoots.size) return out; // 无电源 → 母线为空
+    for (const w of wires.values()) {
+      if (w.a.port === 'ctrl' || w.b.port === 'ctrl') continue; // 控制段永远保留
+      const ra = uf.find(nodeKey(w.a.el, w.a.port));
+      const rb = uf.find(nodeKey(w.b.el, w.b.port));
+      if (sourceRoots.has(ra) || sourceRoots.has(rb)) out.add(w.id);
+    }
+    return out;
+  }
+
+  /**
+   * 「电源母线」导线 id 集合（1.1.2，带缓存）。仅在结构修订号变化时重算一次；
+   * 稳态 / 每帧刷新时不产生任何计算。
+   * @returns {Set<string>} 可隐藏的电源母线导线 id 集合
+   */
+  function getPowerBusWireIds() {
+    if (powerBusRev !== revision) {
+      powerBusWireIds = computePowerBusWireIds();
+      powerBusRev = revision;
+    }
+    return powerBusWireIds;
+  }
+
+  /**
+   * 某条导线是否落在「电源母线」上（1.1.2），即渲染层「隐藏电源线」开关的目标集合。
+   * 判据已内含「控制段排除」，调用方直接使用即可。
+   * @param {string} id 导线 id
+   * @returns {boolean}
+   */
+  function isWireOnPowerBus(id) {
+    return getPowerBusWireIds().has(id);
+  }
+
   /** 当前仿真时间（秒）。 */
   function getSimTime() {
     return simTime;
@@ -722,6 +806,25 @@ export function createEngine() {
     return true;
   }
 
+  /**
+   * 当前是否隐藏「电源线条」（1.1.0 视图偏好）。
+   * @returns {boolean}
+   */
+  function getPowerWiresHidden() {
+    return powerWiresHidden;
+  }
+
+  /**
+   * 设置电源线条隐藏偏好（1.1.0）。仅存偏好，不自增修订号——渲染层通过 board 的
+   * O(1) 类切换响应，不触发结构重建 / 动态刷新门控失效。
+   * @param {boolean} b 是否隐藏电源线条
+   * @returns {boolean} 是否设置成功
+   */
+  function setPowerWiresHidden(b) {
+    powerWiresHidden = b === true;
+    return true;
+  }
+
   /** 清空画布并复位。 */
   function reset() {
     elements.clear();
@@ -746,6 +849,7 @@ export function createEngine() {
       dayCycle,
       wireStyle,
       wiresHidden, // 1.0.8：线条隐藏偏好随序列化保存（旧 JSON 无此字段 → 默认显示）
+      powerWiresHidden, // 1.1.0：电源线条隐藏偏好随序列化保存（旧 JSON 无此字段 → 默认显示）
       idSeq,
       wireSeq,
       elements: getElements().map((el) => ({
@@ -815,6 +919,8 @@ export function createEngine() {
     wireStyle = obj.wireStyle === 'curve' ? 'curve' : 'straight';
     // 线条隐藏：仅接受 true，缺省 / 旧 JSON 回退显示（1.0.8 向后兼容）
     wiresHidden = obj.wiresHidden === true;
+    // 电源线条隐藏：仅接受 true，缺省 / 旧 JSON 回退显示（1.1.0 向后兼容）
+    powerWiresHidden = obj.powerWiresHidden === true;
     powered = new Set();
     bumpRevision();
     bumpDyn(); // 反序列化后动态状态全新，通知渲染层做一次全量动态刷新
@@ -850,6 +956,10 @@ export function createEngine() {
     getElementViews,
     getElements,
     getWires,
+    /** 「电源母线」导线 id 集合（1.1.0 / 判据 1.1.2，带缓存）。 */
+    getPowerBusWireIds,
+    /** 某条导线是否落在「电源母线」上（1.1.0 / 判据 1.1.2）。 */
+    isWireOnPowerBus,
     /** 导线是否存在（1.0.5：渲染层每帧自愈检查用，避免 getWires() 每帧建大数组）。 */
     hasWire: (id) => wires.has(id),
     getSimTime,
@@ -863,6 +973,9 @@ export function createEngine() {
     /** 线条隐藏偏好（1.0.8 视图偏好，随序列化保存）。 */
     getWiresHidden,
     setWiresHidden,
+    /** 电源线条隐藏偏好（1.1.0 视图偏好，随序列化保存）。 */
+    getPowerWiresHidden,
+    setPowerWiresHidden,
     hasElement: (id) => elements.has(id),
     getElement: (id) => elements.get(id) || null,
     // 仿真

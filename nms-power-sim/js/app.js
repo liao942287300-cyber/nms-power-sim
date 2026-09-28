@@ -50,6 +50,7 @@ const dom = {
   speedBtns: [...document.querySelectorAll('.speed-btn')],
   wireStyleBtns: [...document.querySelectorAll('.wire-style-btn')],
   btnWiresHidden: document.getElementById('btn-wires-hidden'),
+  btnPowerWiresHidden: document.getElementById('btn-power-wires-hidden'),
   labTitle: document.getElementById('lab-title'),
   zoomLabel: document.getElementById('zoom-label'),
   btnZoomIn: document.getElementById('btn-zoom-in'),
@@ -164,6 +165,9 @@ function afterHistoryRestore() {
   // 1.0.8：恢复随快照保存的线条隐藏偏好
   board.setWiresHidden(engine.getWiresHidden());
   syncWiresHiddenUI();
+  // 1.1.0：恢复随快照保存的电源线条隐藏偏好
+  board.setPowerWiresHidden(engine.getPowerWiresHidden());
+  syncPowerWiresHiddenUI();
   if (paused) settleNeeded = true;
   dom.canvasWrap.classList.toggle('is-empty', engine.getElements().length === 0);
   board.render();
@@ -798,6 +802,9 @@ dom.importFile.addEventListener('change', () => {
     // 恢复随 JSON 保存的线条隐藏偏好（缺省 / 旧 JSON → 显示）
     board.setWiresHidden(engine.getWiresHidden());
     syncWiresHiddenUI();
+    // 恢复随 JSON 保存的电源线条隐藏偏好（缺省 / 旧 JSON → 显示）
+    board.setPowerWiresHidden(engine.getPowerWiresHidden());
+    syncPowerWiresHiddenUI();
     dom.canvasWrap.classList.toggle('is-empty', engine.getElements().length === 0);
     board.render();
     renderInspectorProps();
@@ -842,6 +849,23 @@ if (dom.btnWiresHidden) {
     board.setWiresHidden(next);
     engine.setWiresHidden(next);
     syncWiresHiddenUI();
+  });
+}
+
+/* 电源线条隐藏开关（1.1.0）：同步 board（O(1) 类切换）、engine（随序列化保存）与按钮按下态。
+   语义：按线粒度隐藏「逻辑上由电源供电且非控制段」的线缆，控制段保留。 */
+function syncPowerWiresHiddenUI() {
+  if (!dom.btnPowerWiresHidden) return;
+  const hidden = board.getPowerWiresHidden();
+  dom.btnPowerWiresHidden.classList.toggle('is-active', hidden);
+  dom.btnPowerWiresHidden.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+}
+if (dom.btnPowerWiresHidden) {
+  dom.btnPowerWiresHidden.addEventListener('click', () => {
+    const next = !board.getPowerWiresHidden();
+    board.setPowerWiresHidden(next);
+    engine.setPowerWiresHidden(next);
+    syncPowerWiresHiddenUI();
   });
 }
 
@@ -1100,6 +1124,9 @@ function loadInstanceEntry(entry) {
   // 恢复随 JSON 保存的线条隐藏偏好（缺省 / 旧 JSON → 显示）
   board.setWiresHidden(engine.getWiresHidden());
   syncWiresHiddenUI();
+  // 恢复随 JSON 保存的电源线条隐藏偏好（缺省 / 旧 JSON → 显示）
+  board.setPowerWiresHidden(engine.getPowerWiresHidden());
+  syncPowerWiresHiddenUI();
   dom.canvasWrap.classList.remove('is-empty');
   dom.labTitle.textContent = `仿真实验室 · 实例：${entry.name}`;
   switchView('lab');
@@ -1384,6 +1411,7 @@ function boot() {
   updateHistoryButtons();
   syncWireStyleUI();
   syncWiresHiddenUI();
+  syncPowerWiresHiddenUI();
   renderInspectorProps();
   renderInspectorStatus();
   updateTimeLabel();

@@ -468,6 +468,13 @@ export function createBoard(svg, engine, opts = {}) {
   let wireStyle = 'straight';
   /** 线条隐藏（1.0.8）：true 时导线与交叉拱整层视觉隐藏，元件保留。O(1) 类切换。 */
   let wiresHidden = false;
+  /**
+   * 电源线条隐藏（1.1.0，判据 1.1.2）：true 时按线粒度隐藏「电源母线」上的导线
+   * （彩色线 + halo 底衬 + 交叉拱）——即从电源出发、沿途不穿过任何开关 a-b 内部
+   * 即可达的那些线。结果记为每条导线的 isPowerNet 标志并写进其 DOM class
+   * （is-power-net）。O(1) 类切换，不重建 DOM。
+   */
+  let powerWiresHidden = false;
 
   /* ---- 渲染结构 / 缓存（结构重建与每帧刷新分离） ---- */
   let viewportEl = null;    // <g class="viewport">
@@ -778,6 +785,60 @@ export function createBoard(svg, engine, opts = {}) {
     });
   }
 
+  /* ---- 电源线条隐藏（1.1.0）---- */
+
+  /**
+   * 某条导线是否「受隐藏电源线开关影响」（1.1.2）= 落在电源母线上（从电源出发、
+   * 沿途不穿过任何开关 a-b 内部即可达），且两端均非控制段。主判据由引擎给出
+   * （engine.isWireOnPowerBus），此处再兜一层控制段检查，双保险。
+   * @param {string} id 导线 id
+   * @param {{port:string}} a 端点 a
+   * @param {{port:string}} b 端点 b
+   * @returns {boolean}
+   */
+  function isHideablePowerWire(id, a, b) {
+    if (a && a.port === 'ctrl') return false;
+    if (b && b.port === 'ctrl') return false;
+    return engine.isWireOnPowerBus(id);
+  }
+
+  /**
+   * 导线彩色线的完整 class 串（通电态 + 选中态 + 电源线隐藏类，1.1.0）。
+   * 集中在此生成，避免 refreshPowerState / refreshSelection 两处各写一份而漂移。
+   * @param {string} id 导线 id
+   * @param {object} d domWires 记录（含 a / b / isPowerNet）
+   * @param {string|null} selId 当前选中的导线 id（用于写 is-selected）
+   * @returns {string}
+   */
+  function lineClassOf(id, d, selId) {
+    const powered = engine.getNodePowered(d.a.el, d.a.port);
+    return `wire ${powered ? 'is-powered' : 'is-idle'}`
+      + `${id === selId ? ' is-selected' : ''}`
+      + `${d.isPowerNet ? ' is-power-net' : ''}`;
+  }
+
+  /**
+   * 重算并写入全部导线 / 交叉拱的 is-power-net 类（1.1.0）。
+   * 仅在「线缆集合变化」后调用（增删导线 / 增删元件都会改变「电源母线」归属）；
+   * 元件移动、缩放平移不影响该归属，绝不在此刷新（避免拖动期间的 O(W) 常态开销）。
+   */
+  function syncPowerBusClasses() {
+    for (const [id, d] of domWires) {
+      const on = isHideablePowerWire(id, d.a, d.b);
+      if (on !== d.isPowerNet) {
+        d.isPowerNet = on;
+        toggleCls(d.line, 'is-power-net', on);
+        toggleCls(d.halo, 'is-power-net', on);
+      }
+    }
+    for (const j of domJumps) {
+      const dw = domWires.get(j.wireId);
+      const on = !!(dw && dw.isPowerNet);
+      toggleCls(j.node, 'is-power-net', on);
+      if (j.casing) toggleCls(j.casing, 'is-power-net', on);
+    }
+  }
+
   /**
    * 增量刷新导线几何（1.0.7）：只重写 changedSet 内导线的 halo/line 的 path d
    * （直线带交叉拱 / 曲线两种 wireStyle 均正确），缺失节点补建、失效节点移除，
@@ -808,11 +869,13 @@ export function createBoard(svg, engine, opts = {}) {
         : buildPath(wd.pts, jumps.get(wd.id));
       if (!rec) {
         // 新增导线：补建 halo + 彩色线（初始 is-idle，通电类由动态刷新补齐）
-        const halo = el('path', { d, class: 'wire-halo', fill: 'none' });
-        const line = el('path', { d, class: 'wire is-idle', fill: 'none' });
+        const isPn = isHideablePowerWire(id, wd.a, wd.b);
+        const pn = isPn ? ' is-power-net' : '';
+        const halo = el('path', { d, class: `wire-halo${pn}`, fill: 'none' });
+        const line = el('path', { d, class: `wire is-idle${pn}`, fill: 'none' });
         halosLayerEl.appendChild(halo);
         linesLayerEl.appendChild(line);
-        rec = { line, halo, a: wd.a, b: wd.b, bbox: wireBBoxOf(wd) };
+        rec = { line, halo, a: wd.a, b: wd.b, bbox: wireBBoxOf(wd), isPowerNet: isPn };
         domWires.set(id, rec);
       } else if (rec.line.getAttribute('d') !== d) {
         rec.line.setAttribute('d', d);
@@ -842,24 +905,28 @@ export function createBoard(svg, engine, opts = {}) {
     for (const [wid, list] of jumps) {
       const pts = ptsById.get(wid);
       if (!pts) continue;
+      const dw = domWires.get(wid);
+      const pn = dw && dw.isPowerNet ? ' is-power-net' : '';
       for (const jp of list) {
         const d = arcPathForJump(pts, jp);
         if (!d) continue;
-        jumpsLayerEl.appendChild(el('path', {
-          d, class: 'jump-casing', fill: 'none', 'pointer-events': 'none',
-        }));
+        const casing = el('path', {
+          d, class: `jump-casing${pn}`, fill: 'none', 'pointer-events': 'none',
+        });
+        jumpsLayerEl.appendChild(casing);
         const arc = el('path', {
-          d, class: 'jump-arc is-idle', fill: 'none', 'pointer-events': 'none',
+          d, class: `jump-arc is-idle${pn}`, fill: 'none', 'pointer-events': 'none',
         });
         jumpsLayerEl.appendChild(arc);
-        domJumps.push({ node: arc, wireId: wid });
+        domJumps.push({ node: arc, casing, wireId: wid });
       }
     }
     // 新建弧为初始 is-idle：立即按当前通电态对齐，避免依赖下一次动态刷新
     for (const j of domJumps) {
       const dw = domWires.get(j.wireId);
       const powered = dw ? engine.getNodePowered(dw.a.el, dw.a.port) : false;
-      j.node.setAttribute('class', `jump-arc ${powered ? 'is-powered' : 'is-idle'}`);
+      const pn = dw && dw.isPowerNet ? ' is-power-net' : '';
+      j.node.setAttribute('class', `jump-arc ${powered ? 'is-powered' : 'is-idle'}${pn}`);
     }
   }
 
@@ -916,6 +983,9 @@ export function createBoard(svg, engine, opts = {}) {
       }
     }
     if (affected.size) refreshWirePaths(affected);
+    // 线缆集合变化 → 「电源母线」归属可能变化，全量重算 is-power-net 类（1.1.0）。
+    // 元件移动（el-move）不改变 ch.wires，故拖动期间不触发该 O(W) 扫描。
+    if (ch.wires.size) syncPowerBusClasses();
     stats.incremental++;
     return structural;
   }
@@ -956,13 +1026,16 @@ export function createBoard(svg, engine, opts = {}) {
       const d = wd.curve
         ? curvePathD(wd.pts[0], wd.d1, wd.pts[1], wd.d2)
         : buildPath(wd.pts, jumps.get(wd.id));
+      // 电源母线归属（1.1.0 / 判据 1.1.2）：写进 halo / 彩色线的 class
+      const isPn = isHideablePowerWire(wd.id, wd.a, wd.b);
+      const pn = isPn ? ' is-power-net' : '';
       // 暗色底衬 halo：在交叉处「切断」下层导线，使交叉点分层可辨
-      const halo = el('path', { d, class: 'wire-halo', fill: 'none' });
+      const halo = el('path', { d, class: `wire-halo${pn}`, fill: 'none' });
       // 彩色线
-      const line = el('path', { d, class: 'wire is-idle', fill: 'none' });
+      const line = el('path', { d, class: `wire is-idle${pn}`, fill: 'none' });
       halosLayerEl.appendChild(halo);
       linesLayerEl.appendChild(line);
-      domWires.set(wd.id, { line, halo, a: wd.a, b: wd.b, bbox: wireBBoxOf(wd) });
+      domWires.set(wd.id, { line, halo, a: wd.a, b: wd.b, bbox: wireBBoxOf(wd), isPowerNet: isPn });
       wireGeom.set(wd.id, { pts: wd.pts, curve: wd.curve, d1: wd.d1, d2: wd.d2 });
     }
     wireLayerEl.appendChild(halosLayerEl);
@@ -1032,15 +1105,15 @@ export function createBoard(svg, engine, opts = {}) {
 
     // 导线：通电类（选中类由 refreshSelection 维护，此处带上快照值保证一致性）
     for (const [id, d] of domWires) {
-      const powered = engine.getNodePowered(d.a.el, d.a.port);
-      const cls = `wire ${powered ? 'is-powered' : 'is-idle'}${id === selWireCache ? ' is-selected' : ''}`;
+      const cls = lineClassOf(id, d, selWireCache);
       if (d.line.getAttribute('class') !== cls) d.line.setAttribute('class', cls);
     }
     // 拱弧颜色跟随其所属导线的通电状态
     for (const j of domJumps) {
       const dw = domWires.get(j.wireId);
       const powered = dw ? engine.getNodePowered(dw.a.el, dw.a.port) : false;
-      const cls = `jump-arc ${powered ? 'is-powered' : 'is-idle'}`;
+      const pn = dw && dw.isPowerNet ? ' is-power-net' : '';
+      const cls = `jump-arc ${powered ? 'is-powered' : 'is-idle'}${pn}`;
       if (j.node.getAttribute('class') !== cls) j.node.setAttribute('class', cls);
     }
   }
@@ -1066,16 +1139,14 @@ export function createBoard(svg, engine, opts = {}) {
         d.selBox = null;
       }
     }
-    // 导线选中态：仅当选中 id 变化时更新（含通电态的完整类字符串）
+    // 导线选中态：仅当选中 id 变化时更新（含通电态 / 电源线隐藏类的完整类字符串）
     const selWire = selection && selection.kind === 'wire' ? selection.id : null;
     if (selWire !== selWireCache) {
       for (const id of [selWireCache, selWire]) {
         if (!id) continue;
         const d = domWires.get(id);
         if (!d) continue;
-        const powered = engine.getNodePowered(d.a.el, d.a.port);
-        d.line.setAttribute('class',
-          `wire ${powered ? 'is-powered' : 'is-idle'}${id === selWire ? ' is-selected' : ''}`);
+        d.line.setAttribute('class', lineClassOf(id, d, selWire));
       }
       selWireCache = selWire;
     }
@@ -1166,6 +1237,11 @@ export function createBoard(svg, engine, opts = {}) {
     toggleCls(svg, 'wires-hidden', !!hidden);
   }
 
+  /** 电源线条隐藏类切换（1.1.0）：只动 svg 根的一个类，O(1)，无任何 DOM 重建。 */
+  function applyPowerWiresHiddenCls(hidden) {
+    toggleCls(svg, 'hide-power-wires', !!hidden);
+  }
+
   function svgPoint(e) {
     return toLocal(e.clientX, e.clientY);
   }
@@ -1211,13 +1287,16 @@ export function createBoard(svg, engine, opts = {}) {
   }
 
   /** 右键：命中导线则选中（配合检查器的删除按钮 / Delete 键删除导线）。
-   *  1.0.8：线条隐藏期间导线不可见 → 拾取表现为选不中（恢复显示后照旧）。 */
+   *  1.0.8：线条隐藏期间导线不可见 → 拾取表现为选不中（恢复显示后照旧）。
+   *  1.1.0：电源线条隐藏期间，被隐藏的电源线同样不可拾取。 */
   function onContextMenu(e) {
     e.preventDefault();
     if (wiresHidden) return;
     const pt = svgPoint(e);
     const wid = pickWire(pt.x, pt.y);
     if (wid) {
+      const d = domWires.get(wid);
+      if (powerWiresHidden && d && d.isPowerNet) return; // 隐藏的电源线不可拾取
       multiSel.clear();
       selection = { kind: 'wire', id: wid };
       render();
@@ -1601,6 +1680,33 @@ export function createBoard(svg, engine, opts = {}) {
     /** 当前是否隐藏线条（1.0.8）。 */
     getWiresHidden() {
       return wiresHidden;
+    },
+    /**
+     * 电源线条隐藏开关（1.1.0 / 判据 1.1.1）：true 时按线粒度隐藏「原始电源直接
+     * 送出的供电段」导线（彩色线 + halo 底衬 + 交叉拱）；经过开关的受控线保留，
+     * 元件、端口点、连线预览、框选框保留。O(1) 类切换（svg 根加 .hide-power-wires
+     * 类，CSS display:none），禁止全量重建；隐藏时若当前选中的导线正好被隐藏则
+     * 自动取消选中（看不见的线不应保持选中）。
+     * @param {boolean} hidden 是否隐藏电源线条
+     */
+    setPowerWiresHidden(hidden) {
+      const next = hidden === true;
+      applyPowerWiresHiddenCls(next);
+      if (next === powerWiresHidden) return;
+      powerWiresHidden = next;
+      if (next && selection && selection.kind === 'wire') {
+        const d = domWires.get(selection.id);
+        if (d && d.isPowerNet) {
+          selection = null;
+          onChange('selection');
+        }
+      }
+      render(); // 结构修订号不变 → 不重建；仅刷新选择态等
+      onChange('power-wires-visibility');
+    },
+    /** 当前是否隐藏电源线条（1.1.0）。 */
+    getPowerWiresHidden() {
+      return powerWiresHidden;
     },
     /**
      * 当前选择：
