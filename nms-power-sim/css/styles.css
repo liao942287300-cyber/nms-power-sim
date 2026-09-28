@@ -204,6 +204,23 @@ h1, h2, h3, h4 { margin: 0 0 6px; font-weight: 650; letter-spacing: 0.2px; }
 .toolbar-spacer { flex: 1; }
 .speed-btn.is-active { background: var(--cyan-soft); border-color: var(--cyan); color: #bff0ff; }
 .wire-style-btn.is-active { background: var(--cyan-soft); border-color: var(--cyan); color: #bff0ff; }
+/* 「隐藏线条 / 隐藏电源线」开关的激活态（修复 1.1.x：原先 .btn.small 匹配不到任何 .is-active 规则，
+   开启后毫无视觉反馈）。视觉语言与上方 speed-btn/wire-style-btn 一致，但更醒目——加内描边 + 外发光，
+   让「已开启」一眼可辨。使用 ID 选择器（1-1-0）确保优先级高于 .btn:hover（0-2-0），
+   同时不影响 .btn.primary / .btn.danger / .btn.primary.is-paused。 */
+#btn-wires-hidden.is-active,
+#btn-power-wires-hidden.is-active {
+  background: var(--cyan-soft);
+  border-color: var(--cyan);
+  color: #bff0ff;
+  font-weight: 650;
+  box-shadow: inset 0 0 0 1px var(--cyan), 0 0 10px rgba(40, 199, 255, 0.55);
+}
+#btn-wires-hidden.is-active:hover,
+#btn-power-wires-hidden.is-active:hover {
+  background: rgba(40, 199, 255, 0.22);
+  border-color: var(--cyan);
+}
 .sim-clock { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); }
 #sim-state { color: var(--green); }
 #sim-state.paused { color: var(--amber); }

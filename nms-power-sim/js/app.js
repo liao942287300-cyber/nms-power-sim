@@ -842,6 +842,9 @@ function syncWiresHiddenUI() {
   const hidden = board.getWiresHidden();
   dom.btnWiresHidden.classList.toggle('is-active', hidden);
   dom.btnWiresHidden.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+  dom.btnWiresHidden.title = hidden
+    ? '线条已隐藏（元件保留）· 点击恢复显示'
+    : '隐藏全部导线与交叉拱（元件保留）';
 }
 if (dom.btnWiresHidden) {
   dom.btnWiresHidden.addEventListener('click', () => {
@@ -859,6 +862,9 @@ function syncPowerWiresHiddenUI() {
   const hidden = board.getPowerWiresHidden();
   dom.btnPowerWiresHidden.classList.toggle('is-active', hidden);
   dom.btnPowerWiresHidden.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+  dom.btnPowerWiresHidden.title = hidden
+    ? '电源母线线缆已隐藏（受控线保留）· 点击恢复显示'
+    : '隐藏电源母线线缆（从电源出发、未被任何开关控制的线；受控线保留）';
 }
 if (dom.btnPowerWiresHidden) {
   dom.btnPowerWiresHidden.addEventListener('click', () => {
